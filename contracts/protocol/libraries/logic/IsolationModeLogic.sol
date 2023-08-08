@@ -34,13 +34,16 @@ library IsolationModeLogic {
     DataTypes.ReserveCache memory reserveCache,
     uint256 repayAmount
   ) internal {
+    // 是否只有一种抵押品，如果是 地址是什么、借贷上限是什么（隔离模式的资产都是有借贷上限的 没有则认为不是隔离模式）
+    // 返回字段：是否未隔离模式、该隔离模式的抵押品的address
     (bool isolationModeActive, address isolationModeCollateralAddress, ) = userConfig
       .getIsolationModeState(reservesData, reservesList);
-
+    // 如果是隔离资产作为抵押物
     if (isolationModeActive) {
+      // 以该隔离资产作为抵押物 的 所有债务
       uint128 isolationModeTotalDebt = reservesData[isolationModeCollateralAddress]
         .isolationModeTotalDebt;
-
+      // 待验证
       uint128 isolatedDebtRepaid = (repayAmount /
         10 **
           (reserveCache.reserveConfiguration.getDecimals() -
@@ -48,6 +51,7 @@ library IsolationModeLogic {
 
       // since the debt ceiling does not take into account the interest accrued, it might happen that amount
       // repaid > debt in isolation mode
+      // 更新以该隔离资产作为抵押物 的 总债务数量
       if (isolationModeTotalDebt <= isolatedDebtRepaid) {
         reservesData[isolationModeCollateralAddress].isolationModeTotalDebt = 0;
         emit IsolationModeTotalDebtUpdated(isolationModeCollateralAddress, 0);

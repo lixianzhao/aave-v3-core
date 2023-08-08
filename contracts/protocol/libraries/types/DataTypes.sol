@@ -6,10 +6,15 @@ library DataTypes {
     //stores the reserve configuration
     ReserveConfigurationMap configuration;
     //the liquidity index. Expressed in ray
+    // Interest cumulated by the reserve during the time
+    // 存款准备金在一段时间内累计的利息
     uint128 liquidityIndex;
     //the current supply rate. Expressed in ray
+    // 流动性利率 LR = R（总的利率） * U（当前的利用率 D/L）
     uint128 currentLiquidityRate;
     //variable borrow index. Expressed in ray
+    // the cumulated variable borrow index 累计变量借用指数
+    // 在deltT时间段内，由浮动借款累计的利息
     uint128 variableBorrowIndex;
     //the current variable borrow rate. Expressed in ray
     uint128 currentVariableBorrowRate;
@@ -18,6 +23,7 @@ library DataTypes {
     //timestamp of last update
     uint40 lastUpdateTimestamp;
     //the id of the reserve. Represents the position in the list of the active reserves
+    // 储备id。表示在活动储备列表中的位置 更新用户的资产列表用
     uint16 id;
     //aToken address
     address aTokenAddress;
@@ -25,7 +31,7 @@ library DataTypes {
     address stableDebtTokenAddress;
     //variableDebtToken address
     address variableDebtTokenAddress;
-    //address of the interest rate strategy
+    //address of the interest rate strategy 利率策略合约地址
     address interestRateStrategyAddress;
     //the current treasury balance, scaled
     uint128 accruedToTreasury;
@@ -45,8 +51,8 @@ library DataTypes {
     //bit 58: borrowing is enabled
     //bit 59: stable rate borrowing enabled
     //bit 60: asset is paused
-    //bit 61: borrowing in isolation mode is enabled
-    //bit 62: siloed borrowing enabled
+    //bit 61: borrowing in isolation mode is enabled 启用隔离模式的借款
+    //bit 62: siloed borrowing enabled 支持孤立借贷
     //bit 63: flashloaning enabled
     //bit 64-79: reserve factor
     //bit 80-115 borrow cap in whole tokens, borrowCap == 0 => no cap
@@ -54,7 +60,7 @@ library DataTypes {
     //bit 152-167 liquidation protocol fee
     //bit 168-175 eMode category
     //bit 176-211 unbacked mint cap in whole tokens, unbackedMintCap == 0 => minting disabled
-    //bit 212-251 debt ceiling for isolation mode with (ReserveConfiguration::DEBT_CEILING_DECIMALS) decimals
+    //bit 212-251 debt ceiling for isolation mode with (ReserveConfiguration::DEBT_CEILING_DECIMALS) decimals 隔离模式的债务上限
     //bit 252-255 unused
 
     uint256 data;
@@ -79,7 +85,11 @@ library DataTypes {
     string label;
   }
 
-  enum InterestRateMode {NONE, STABLE, VARIABLE}
+  enum InterestRateMode {
+    NONE,
+    STABLE,
+    VARIABLE
+  }
 
   struct ReserveCache {
     uint256 currScaledVariableDebt;

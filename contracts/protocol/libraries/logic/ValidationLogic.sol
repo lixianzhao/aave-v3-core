@@ -77,6 +77,7 @@ library ValidationLogic {
     require(!isPaused, Errors.RESERVE_PAUSED);
     require(!isFrozen, Errors.RESERVE_FROZEN);
 
+    // 获取supply的上限
     uint256 supplyCap = reserveCache.reserveConfiguration.getSupplyCap();
     require(
       supplyCap == 0 ||
@@ -145,7 +146,7 @@ library ValidationLogic {
     require(params.amount != 0, Errors.INVALID_AMOUNT);
 
     ValidateBorrowLocalVars memory vars;
-
+    // 池子的健康状态
     (
       vars.isActive,
       vars.isFrozen,
@@ -166,6 +167,7 @@ library ValidationLogic {
     );
 
     //validate interest rate mode
+    // 检测利率模型
     require(
       params.interestRateMode == DataTypes.InterestRateMode.VARIABLE ||
         params.interestRateMode == DataTypes.InterestRateMode.STABLE,
@@ -173,6 +175,7 @@ library ValidationLogic {
     );
 
     vars.reserveDecimals = params.reserveCache.reserveConfiguration.getDecimals();
+    // 池子的债务上限
     vars.borrowCap = params.reserveCache.reserveConfiguration.getBorrowCap();
     unchecked {
       vars.assetUnit = 10 ** vars.reserveDecimals;
@@ -182,17 +185,17 @@ library ValidationLogic {
       vars.totalSupplyVariableDebt = params.reserveCache.currScaledVariableDebt.rayMul(
         params.reserveCache.nextVariableBorrowIndex
       );
-
+      // 池子当前总的债务
       vars.totalDebt =
         params.reserveCache.currTotalStableDebt +
         vars.totalSupplyVariableDebt +
         params.amount;
-
+      // 债务不能超限
       unchecked {
         require(vars.totalDebt <= vars.borrowCap * vars.assetUnit, Errors.BORROW_CAP_EXCEEDED);
       }
     }
-
+    // 隔离模式
     if (params.isolationModeActive) {
       // check that the asset being borrowed is borrowable in isolation mode AND
       // the total exposure is no bigger than the collateral debt ceiling
@@ -210,7 +213,8 @@ library ValidationLogic {
         Errors.DEBT_CEILING_EXCEEDED
       );
     }
-
+    // 高效模式
+    // 高效模式会自定义自己的 LTV 清算阈值等
     if (params.userEModeCategory != 0) {
       require(
         params.reserveCache.reserveConfiguration.getEModeCategory() == params.userEModeCategory,
@@ -218,7 +222,8 @@ library ValidationLogic {
       );
       vars.eModePriceSource = eModeCategories[params.userEModeCategory].priceSource;
     }
-
+    // 以上都是检测池子状态
+    // 接下来是检测用户的状态
     (
       vars.userCollateralInBaseCurrency,
       vars.userDebtInBaseCurrency,
@@ -327,16 +332,17 @@ library ValidationLogic {
     uint256 stableDebt,
     uint256 variableDebt
   ) internal view {
+    // 验证偿还金额 不能为 0
     require(amountSent != 0, Errors.INVALID_AMOUNT);
     require(
       amountSent != type(uint256).max || msg.sender == onBehalfOf,
       Errors.NO_EXPLICIT_AMOUNT_TO_REPAY_ON_BEHALF
     );
-
+    // 当前asset的状态
     (bool isActive, , , , bool isPaused) = reserveCache.reserveConfiguration.getFlags();
     require(isActive, Errors.RESERVE_INACTIVE);
     require(!isPaused, Errors.RESERVE_PAUSED);
-
+    // 判断用户是否具有该类型的债务
     require(
       (stableDebt != 0 && interestRateMode == DataTypes.InterestRateMode.STABLE) ||
         (variableDebt != 0 && interestRateMode == DataTypes.InterestRateMode.VARIABLE),
@@ -576,7 +582,7 @@ library ValidationLogic {
     return (healthFactor, hasZeroLtvCollateral);
   }
 
-  /**
+  /** 验证用户的健康因素和正在提取的资产的生命周期
    * @notice Validates the health factor of a user and the ltv of the asset being withdrawn.
    * @param reservesData The state of all the reserves
    * @param reservesList The addresses of all the active reserves
@@ -711,14 +717,17 @@ library ValidationLogic {
     DataTypes.UserConfigurationMap storage userConfig,
     DataTypes.ReserveConfigurationMap memory reserveConfig
   ) internal view returns (bool) {
+    // 判断借贷比
     if (reserveConfig.getLtv() == 0) {
       return false;
     }
+    // 用户是否已经提供了其他的抵押物，如果没有则说明他是第一个抵押物 则设置为true
     if (!userConfig.isUsingAsCollateralAny()) {
       return true;
     }
+    //  isolationModeActive == false  不是隔离模式
     (bool isolationModeActive, , ) = userConfig.getIsolationModeState(reservesData, reservesList);
-
+    // 不是隔离模式
     return (!isolationModeActive && reserveConfig.getDebtCeiling() == 0);
   }
 
@@ -739,8 +748,11 @@ library ValidationLogic {
     DataTypes.ReserveConfigurationMap memory reserveConfig,
     address aTokenAddress
   ) internal view returns (bool) {
+    // 如果资产处于隔离模式，则获取资产的债务上限（隔离模式的作为抵押物只能借稳定币且具有债务上限）
+    // 债务上限 是 0 的话就是 禁用隔离模式
     if (reserveConfig.getDebtCeiling() != 0) {
       // ensures only the ISOLATED_COLLATERAL_SUPPLIER_ROLE can enable collateral as side-effect of an action
+      // 权限控制
       IPoolAddressesProvider addressesProvider = IncentivizedERC20(aTokenAddress)
         .POOL()
         .ADDRESSES_PROVIDER();
@@ -751,6 +763,7 @@ library ValidationLogic {
         )
       ) return false;
     }
+    // 非隔离模式的资产 返回true
     return validateUseAsCollateral(reservesData, reservesList, userConfig, reserveConfig);
   }
 }

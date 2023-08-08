@@ -12,6 +12,7 @@ import {InitializableImmutableAdminUpgradeabilityProxy} from '../libraries/aave-
  * @dev Acts as factory of proxies and admin of those, so with right to change its implementations
  * @dev Owned by the Aave Governance
  */
+//  针对特定市场的协议地址寄存器。这个合约是不可变的，地址永远不会改变。
 contract PoolAddressesProvider is Ownable, IPoolAddressesProvider {
   // Identifier of the Aave Market
   string private _marketId;

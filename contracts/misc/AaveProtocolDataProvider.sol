@@ -17,6 +17,7 @@ import {IPoolDataProvider} from '../interfaces/IPoolDataProvider.sol';
  * @author Aave
  * @notice Peripheral contract to collect and pre-process information from the Pool.
  */
+// https://etherscan.io/address/0x057835ad21a177dbdd3090bb1cae03eacf78fc6d#readContract
 contract AaveProtocolDataProvider is IPoolDataProvider {
   using ReserveConfiguration for DataTypes.ReserveConfigurationMap;
   using UserConfiguration for DataTypes.UserConfigurationMap;

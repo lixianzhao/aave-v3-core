@@ -67,6 +67,7 @@ library GenericLogic {
     mapping(uint8 => DataTypes.EModeCategory) storage eModeCategories,
     DataTypes.CalculateUserAccountDataParams memory params
   ) internal view returns (uint256, uint256, uint256, uint256, uint256, bool) {
+    // 检查用户是否没有任何的借贷和存款
     if (params.userConfig.isEmpty()) {
       return (0, 0, 0, 0, type(uint256).max, false);
     }

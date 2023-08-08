@@ -11,6 +11,8 @@ import {Errors} from '../libraries/helpers/Errors.sol';
  * @author Aave
  * @notice Access Control List Manager. Main registry of system roles and permissions.
  */
+// 访问控制列表管理器是系统角色和权限的主要注册表。
+// 进行角色管理的
 contract ACLManager is AccessControl, IACLManager {
   bytes32 public constant override POOL_ADMIN_ROLE = keccak256('POOL_ADMIN');
   bytes32 public constant override EMERGENCY_ADMIN_ROLE = keccak256('EMERGENCY_ADMIN');

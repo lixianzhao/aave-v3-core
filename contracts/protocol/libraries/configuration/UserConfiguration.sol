@@ -18,7 +18,7 @@ library UserConfiguration {
   uint256 internal constant COLLATERAL_MASK =
     0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA;
 
-  /**
+  /** 设置是否正在借用某一资产
    * @notice Sets if the user is borrowing the reserve identified by reserveIndex
    * @param self The configuration object
    * @param reserveIndex The index of the reserve in the bitmap
@@ -40,7 +40,7 @@ library UserConfiguration {
     }
   }
 
-  /**
+  /** 设置用户是否使用由reserveIndex标识的储备作为抵押品
    * @notice Sets if the user is using as collateral the reserve identified by reserveIndex
    * @param self The configuration object
    * @param reserveIndex The index of the reserve in the bitmap
@@ -62,7 +62,7 @@ library UserConfiguration {
     }
   }
 
-  /**
+  /** 返回用户对某一资产是否有 借款或者作为抵押物
    * @notice Returns if a user has been using the reserve for borrowing or as collateral
    * @param self The configuration object
    * @param reserveIndex The index of the reserve in the bitmap
@@ -78,7 +78,7 @@ library UserConfiguration {
     }
   }
 
-  /**
+  /** 验证用户是否正在借某一资产
    * @notice Validate a user has been using the reserve for borrowing
    * @param self The configuration object
    * @param reserveIndex The index of the reserve in the bitmap
@@ -94,7 +94,7 @@ library UserConfiguration {
     }
   }
 
-  /**
+  /** 验证用户是否正在使用该资产作为抵押物
    * @notice Validate a user has been using the reserve as collateral
    * @param self The configuration object
    * @param reserveIndex The index of the reserve in the bitmap
@@ -110,7 +110,7 @@ library UserConfiguration {
     }
   }
 
-  /**
+  /** 检查用户是否只提供了一种资产作为抵押物
    * @notice Checks if a user has been supplying only one reserve as collateral
    * @dev this uses a simple trick - if a number is a power of two (only one bit set) then n & (n - 1) == 0
    * @param self The configuration object
@@ -123,7 +123,7 @@ library UserConfiguration {
     return collateralData != 0 && (collateralData & (collateralData - 1) == 0);
   }
 
-  /**
+  /** 检查用户是否存在抵押物（有就行）
    * @notice Checks if a user has been supplying any reserve as collateral
    * @param self The configuration object
    * @return True if the user has been supplying as collateral any reserve, false otherwise
@@ -134,7 +134,7 @@ library UserConfiguration {
     return self.data & COLLATERAL_MASK != 0;
   }
 
-  /**
+  /** 检查用户是否只有一种借款
    * @notice Checks if a user has been borrowing only one asset
    * @dev this uses a simple trick - if a number is a power of two (only one bit set) then n & (n - 1) == 0
    * @param self The configuration object
@@ -145,7 +145,7 @@ library UserConfiguration {
     return borrowingData != 0 && (borrowingData & (borrowingData - 1) == 0);
   }
 
-  /**
+  /** 检查用户是否存在借款（任意多种）
    * @notice Checks if a user has been borrowing from any reserve
    * @param self The configuration object
    * @return True if the user has been borrowing any reserve, false otherwise
@@ -154,7 +154,7 @@ library UserConfiguration {
     return self.data & BORROWING_MASK != 0;
   }
 
-  /**
+  /** 检查用户是否没有任何存款和借款
    * @notice Checks if a user has not been using any reserve for borrowing or supply
    * @param self The configuration object
    * @return True if the user has not been borrowing or supplying any reserve, false otherwise
@@ -172,24 +172,31 @@ library UserConfiguration {
    * @return The address of the only asset used as collateral
    * @return The debt ceiling of the reserve
    */
+  // 返回当前用户是否拥有隔离模式的资产
   function getIsolationModeState(
     DataTypes.UserConfigurationMap memory self,
     mapping(address => DataTypes.ReserveData) storage reservesData,
     mapping(uint256 => address) storage reservesList
   ) internal view returns (bool, address, uint256) {
+    // 检查用户是否只提供了一种asset作为抵押品
+    // 因为只有存在一种可用抵押资产，才有可能是隔离模式（格式和正常不能共存）
     if (isUsingAsCollateralOne(self)) {
+      // 资产ID
       uint256 assetId = _getFirstAssetIdByMask(self, COLLATERAL_MASK);
-
+      // 根据ID 获取 对应的address
       address assetAddress = reservesList[assetId];
+      // 根据address获取资产的借贷上限
       uint256 ceiling = reservesData[assetAddress].configuration.getDebtCeiling();
+      // 存在借贷上限，就是隔离模式的资产
       if (ceiling != 0) {
         return (true, assetAddress, ceiling);
       }
     }
+    // 有多个可用的抵押资产，肯定不是隔离模式了
     return (false, address(0), 0);
   }
 
-  /**
+  /** 判断用户是否具有隔离状态的借款（如果借用此种类型的资产， 则不能与其他类型资产的借款共存，必须还掉一个才行）
    * @notice Returns the siloed borrowing state for the user
    * @param self The configuration object
    * @param reservesData The data of all the reserves

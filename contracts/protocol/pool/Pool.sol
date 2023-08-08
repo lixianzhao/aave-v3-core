@@ -24,18 +24,21 @@ import {PoolStorage} from './PoolStorage.sol';
  * @author Aave
  * @notice Main point of interaction with an Aave protocol's market
  * - Users can:
- *   # Supply
+ *   # Supply 存
  *   # Withdraw
  *   # Borrow
- *   # Repay
- *   # Swap their loans between variable and stable rate
+ *   # Repay 偿还
+ *   # Swap their loans between variable and stable rate 将他们的贷款在浮动利率和稳定利率之间互换
  *   # Enable/disable their supplied assets as collateral rebalance stable rate borrow positions
- *   # Liquidate positions
- *   # Execute Flash Loans
+ *   # Liquidate positions 平仓、清算
+ *   # Execute Flash Loans 执行闪电贷
+ *
  * @dev To be covered by a proxy contract, owned by the PoolAddressesProvider of the specific market
  * @dev All admin functions are callable by the PoolConfigurator contract defined also in the
  *   PoolAddressesProvider
  */
+// 合约是协议中主要面向用户的合约。它公开了可以使用Solidity或Web3库调用的流动性管理方法。
+// 合约地址 https://etherscan.io/address/0x87870bca3f3fd6335c3f4ce8392d69350b4fa4e2
 contract Pool is VersionedInitializable, PoolStorage, IPool {
   using ReserveLogic for DataTypes.ReserveData;
 
@@ -139,6 +142,12 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
       BridgeLogic.executeBackUnbacked(_reserves[asset], asset, amount, fee, _bridgeProtocolFee);
   }
 
+  /**
+   * @param asset address 存的资产
+   * @param amount 存储数量
+   * @param onBehalfOf 接收地址
+   * @param referralCode
+   */
   /// @inheritdoc IPool
   function supply(
     address asset,
@@ -215,6 +224,13 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
       );
   }
 
+  /**
+   * @param asset （需要借的token）
+   * @param amount (amount to be borrowed)
+   * @param interestRateMode ( 借债的类型 Stable: 1, Variable: 2)
+   * @param referralCode (我们推荐计划的推荐代码。使用0表示没有推荐代码。)
+   * @param onBehalfOf (承担债务的用户地址。)
+   */
   /// @inheritdoc IPool
   function borrow(
     address asset,
@@ -245,6 +261,13 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
     );
   }
 
+  /**
+   * 偿还（偿还具有利率模式的资产的债务金额。）
+   * @param asset
+   * @param amount
+   * @param interestRateMode ( 借债的类型 Stable: 1, Variable: 2)
+   * @param onBehalfOf （承担债务的用户地址）
+   */
   /// @inheritdoc IPool
   function repay(
     address asset,
@@ -592,6 +615,7 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
     );
   }
 
+  // 初始化储备，激活它，分配token和债务token,利率策略
   /// @inheritdoc IPool
   function initReserve(
     address asset,
@@ -715,7 +739,7 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
   }
 
   /// @inheritdoc IPool
-  /// @dev Deprecated: maintained for compatibility purposes
+  /// @dev Deprecated: maintained for compatibility purposes 已弃用:出于兼容性目的而维护 同supply
   function deposit(
     address asset,
     uint256 amount,

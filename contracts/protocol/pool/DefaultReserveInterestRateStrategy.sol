@@ -40,16 +40,18 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
   // Base variable borrow rate when usage rate = 0. Expressed in ray
   uint256 internal immutable _baseVariableBorrowRate;
 
-  // Slope of the variable interest curve when usage ratio > 0 and <= OPTIMAL_USAGE_RATIO. Expressed in ray
+  // Slope of the variable interest curve when usage ratio > 0 and <= OPTIMAL_USAGE_RATIO. Expressed in ray 使用率> 0和<= OPTIMAL_USAGE_RATIO时可变利率曲线的斜率。以射线表示
   uint256 internal immutable _variableRateSlope1;
 
   // Slope of the variable interest curve when usage ratio > OPTIMAL_USAGE_RATIO. Expressed in ray
+  // 当使用率> OPTIMAL_USAGE_RATIO时，可变利率曲线的斜率。以射线表示
   uint256 internal immutable _variableRateSlope2;
 
-  // Slope of the stable interest curve when usage ratio > 0 and <= OPTIMAL_USAGE_RATIO. Expressed in ray
+  // Slope of the stable interest curve when usage ratio > 0 and <= OPTIMAL_USAGE_RATIO. Expressed in ray 使用率> 0和<= OPTIMAL_USAGE_RATIO时稳定利率曲线的斜率。以射线表示
   uint256 internal immutable _stableRateSlope1;
 
   // Slope of the stable interest curve when usage ratio > OPTIMAL_USAGE_RATIO. Expressed in ray
+  // 当使用率> OPTIMAL_USAGE_RATIO时稳定利率曲线的斜率。以射线表示
   uint256 internal immutable _stableRateSlope2;
 
   // Premium on top of `_variableRateSlope1` for base stable borrowing rate
@@ -61,10 +63,10 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
   /**
    * @dev Constructor.
    * @param provider The address of the PoolAddressesProvider contract
-   * @param optimalUsageRatio The optimal usage ratio
-   * @param baseVariableBorrowRate The base variable borrow rate
-   * @param variableRateSlope1 The variable rate slope below optimal usage ratio
-   * @param variableRateSlope2 The variable rate slope above optimal usage ratio
+   * @param optimalUsageRatio The optimal usage ratio 最佳使用率
+   * @param baseVariableBorrowRate The base variable borrow rate 基本可变借款利率
+   * @param variableRateSlope1 The variable rate slope below optimal usage ratio 低于最佳使用率 的 可变比率斜率
+   * @param variableRateSlope2 The variable rate slope above optimal usage ratio 高于最佳使用率 的 可变比率斜率
    * @param stableRateSlope1 The stable rate slope below optimal usage ratio
    * @param stableRateSlope2 The stable rate slope above optimal usage ratio
    * @param baseStableRateOffset The premium on top of variable rate for base stable borrowing rate
@@ -158,16 +160,19 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
   function calculateInterestRates(
     DataTypes.CalculateInterestRatesParams memory params
   ) public view override returns (uint256, uint256, uint256) {
+    // 初始换缓存变量 用户缓存计算结果
     CalcInterestRatesLocalVars memory vars;
-
+    // 总债务 = 固定债务 + 浮动债务
     vars.totalDebt = params.totalStableDebt + params.totalVariableDebt;
 
     vars.currentLiquidityRate = 0;
     vars.currentVariableBorrowRate = _baseVariableBorrowRate;
     vars.currentStableBorrowRate = getBaseStableBorrowRate();
-
+    // 有借款时
     if (vars.totalDebt != 0) {
+      // 固定贷款占用比例
       vars.stableToTotalDebtRatio = params.totalStableDebt.rayDiv(vars.totalDebt);
+
       vars.availableLiquidity =
         IERC20(params.reserve).balanceOf(params.aToken) +
         params.liquidityAdded -
@@ -179,24 +184,30 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
         vars.availableLiquidityPlusDebt + params.unbacked
       );
     }
-
+    // 当 U > 最佳利用率 （U_optimal）
     if (vars.borrowUsageRatio > OPTIMAL_USAGE_RATIO) {
+      // excessUtilizationRateRatio = (U - U_optimal)/ (1 - U_optimal )
+      // 超过最佳利用率的比例
       uint256 excessBorrowUsageRatio = (vars.borrowUsageRatio - OPTIMAL_USAGE_RATIO).rayDiv(
         MAX_EXCESS_USAGE_RATIO
       );
-
+      // R_base(stable) + R_slope1 + R_slope2 * excessBorrowUsageRatio
       vars.currentStableBorrowRate +=
         _stableRateSlope1 +
         _stableRateSlope2.rayMul(excessBorrowUsageRatio);
 
+      // R_base(variable) + R_slope1 + R_slope2 * excessBorrowUsageRatio
       vars.currentVariableBorrowRate +=
         _variableRateSlope1 +
         _variableRateSlope2.rayMul(excessBorrowUsageRatio);
     } else {
+      // 当 U < 最佳利用率 （U_optimal）
+      // R_base(stable) + R_slope1 + R_slope2 * excessBorrowUsageRatio
       vars.currentStableBorrowRate += _stableRateSlope1.rayMul(vars.borrowUsageRatio).rayDiv(
         OPTIMAL_USAGE_RATIO
       );
 
+      // R_base(stable) + R_slope1 + R_slope2 * excessBorrowUsageRatio
       vars.currentVariableBorrowRate += _variableRateSlope1.rayMul(vars.borrowUsageRatio).rayDiv(
         OPTIMAL_USAGE_RATIO
       );
@@ -207,7 +218,10 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
         OPTIMAL_STABLE_TO_TOTAL_DEBT_RATIO).rayDiv(MAX_EXCESS_STABLE_TO_TOTAL_DEBT_RATIO);
       vars.currentStableBorrowRate += _stableRateExcessOffset.rayMul(excessStableDebtRatio);
     }
-
+    // 计算流动性收益率（每单位流动性获取的利息）
+    // overallBorrowRate * U * (100 - reserveFactor)%
+    // overallBorrowRate 是固定和浮动利率的加权平均利率
+    // reserveFactor 设定的划入池子准备金的百分比份额
     vars.currentLiquidityRate = _getOverallBorrowRate(
       params.totalStableDebt,
       params.totalVariableDebt,

@@ -67,12 +67,14 @@ abstract contract ScaledBalanceTokenBase is MintableIncentivizedERC20, IScaledBa
     address caller,
     address onBehalfOf,
     uint256 amount,
-    uint256 index
+    uint256 index // 数量的缩放比例。一般传入reserve.liquidityIndex
   ) internal returns (bool) {
     uint256 amountScaled = amount.rayDiv(index);
     require(amountScaled != 0, Errors.INVALID_MINT_AMOUNT);
 
+    // 直接调用ERC20.balanceOf() 返回的是不计息的数量
     uint256 scaledBalance = super.balanceOf(onBehalfOf);
+
     uint256 balanceIncrease = scaledBalance.rayMul(index) -
       scaledBalance.rayMul(_userState[onBehalfOf].additionalData);
 
@@ -83,7 +85,7 @@ abstract contract ScaledBalanceTokenBase is MintableIncentivizedERC20, IScaledBa
     uint256 amountToMint = amount + balanceIncrease;
     emit Transfer(address(0), onBehalfOf, amountToMint);
     emit Mint(caller, onBehalfOf, amountToMint, balanceIncrease, index);
-
+    // 代表首次Supply
     return (scaledBalance == 0);
   }
 

@@ -14,18 +14,21 @@ library MathUtils {
   /// @dev Ignoring leap years
   uint256 internal constant SECONDS_PER_YEAR = 365 days;
 
-  /**
+  /** 函数来计算使用线性利率公式累积的利息
    * @dev Function to calculate the interest accumulated using a linear interest rate formula
-   * @param rate The interest rate, in ray
-   * @param lastUpdateTimestamp The timestamp of the last update of the interest
-   * @return The interest rate linearly accumulated during the timeDelta, in ray
+   * @param rate The interest rate, in ray 利率
+   * @param lastUpdateTimestamp The timestamp of the last update of the interest 利息最后一次更新的时间戳
+   * @return The interest rate linearly accumulated during the timeDelta, in ray 在时间delta期间线性累积的利率
    */
+  // LRt * Δyear + 1
+  // Δsecond/SECONDS_PER_YEAR
   function calculateLinearInterest(
     uint256 rate,
     uint40 lastUpdateTimestamp
   ) internal view returns (uint256) {
     //solium-disable-next-line
     uint256 result = rate * (block.timestamp - uint256(lastUpdateTimestamp));
+    // 换算成年利率
     unchecked {
       result = result / SECONDS_PER_YEAR;
     }
@@ -36,9 +39,10 @@ library MathUtils {
   /**
    * @dev Function to calculate the interest using a compounded interest rate formula
    * To avoid expensive exponentiation, the calculation is performed using a binomial approximation:
-   *
+   * 函数使用复合利率公式计算利息避免昂贵的幂运算，计算是用二项式近似进行的
    *  (1+x)^n = 1+n*x+[n/2*(n-1)]*x^2+[n/6*(n-1)*(n-2)*x^3...
    *
+   * 这种近似值略低于流动性提供者的收益，也略低于借款人的收费，其优势在于大大降低天然气成本。白皮书中包含了对近似值的参考和一个表，显示了每个不同时间段的误差
    * The approximation slightly underpays liquidity providers and undercharges borrowers, with the advantage of great
    * gas cost reductions. The whitepaper contains reference to the approximation and a table showing the margin of
    * error per different time periods
@@ -47,6 +51,7 @@ library MathUtils {
    * @param lastUpdateTimestamp The timestamp of the last update of the interest
    * @return The interest rate compounded during the timeDelta, in ray
    */
+  // 计算复利
   function calculateCompoundedInterest(
     uint256 rate,
     uint40 lastUpdateTimestamp,

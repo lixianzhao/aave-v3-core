@@ -85,7 +85,7 @@ library ReserveLogic {
     }
   }
 
-  /**
+  /** 更新流动性累积指数和可变借款指数
    * @notice Updates the liquidity cumulative index and the variable borrow index.
    * @param reserve The reserve object
    * @param reserveCache The caching layer for the reserve data
@@ -95,19 +95,20 @@ library ReserveLogic {
     DataTypes.ReserveCache memory reserveCache
   ) internal {
     // If time didn't pass since last stored timestamp, skip state update
-    //solium-disable-next-line
+    // solium-disable-next-line
     if (reserve.lastUpdateTimestamp == uint40(block.timestamp)) {
       return;
     }
-
+    //  更新Index系列变量（贴现变量）
     _updateIndexes(reserve, reserveCache);
+    // 更新风险准备金
     _accrueToTreasury(reserve, reserveCache);
 
-    //solium-disable-next-line
+    // solium-disable-next-line
     reserve.lastUpdateTimestamp = uint40(block.timestamp);
   }
 
-  /**
+  /** 将预定数量的资产积累到准备金中，作为固定的即时收入
    * @notice Accumulates a predefined amount of asset to the reserve as a fixed, instantaneous income. Used for example
    * to accumulate the flashloan fee to the reserve, and spread it between all the suppliers.
    * @param reserve The reserve object
@@ -261,6 +262,7 @@ library ReserveLogic {
     );
 
     //debt accrued is the sum of the current debt minus the sum of the debt at the last update
+    // 应计债务是当前债务减去上次更新时债务的总和
     vars.totalDebtAccrued =
       vars.currTotalVariableDebt +
       reserveCache.currTotalStableDebt -
@@ -282,6 +284,7 @@ library ReserveLogic {
    * @param reserve The reserve reserve to be updated
    * @param reserveCache The cache layer holding the cached protocol data
    */
+
   function _updateIndexes(
     DataTypes.ReserveData storage reserve,
     DataTypes.ReserveCache memory reserveCache
@@ -289,14 +292,19 @@ library ReserveLogic {
     // Only cumulating on the supply side if there is any income being produced
     // The case of Reserve Factor 100% is not a problem (currentLiquidityRate == 0),
     // as liquidity index should not be updated
+    // currLiquidityRate == 0 说明池子还没有流动性
     if (reserveCache.currLiquidityRate != 0) {
+      // LRt * Δyear + 1
       uint256 cumulatedLiquidityInterest = MathUtils.calculateLinearInterest(
         reserveCache.currLiquidityRate,
         reserveCache.reserveLastUpdateTimestamp
       );
+      // 用于计算新的存款贴现因子（净值 一个Atoken的价格）
+      // ( LRt * Δyear + 1)LIt-1
       reserveCache.nextLiquidityIndex = cumulatedLiquidityInterest.rayMul(
         reserveCache.currLiquidityIndex
       );
+      // 用于保证uint256向uint128转换的安全无溢出
       reserve.liquidityIndex = reserveCache.nextLiquidityIndex.toUint128();
     }
 
@@ -304,21 +312,24 @@ library ReserveLogic {
     // reserveCache.currVariableBorrowRate != 0 is not a correct validation,
     // because a positive base variable rate can be stored on
     // reserveCache.currVariableBorrowRate, but the index should not increase
+    // 可变借款指数只有在存在可变债务时才会更新。
     if (reserveCache.currScaledVariableDebt != 0) {
+      // 计算复利
       uint256 cumulatedVariableBorrowInterest = MathUtils.calculateCompoundedInterest(
         reserveCache.currVariableBorrowRate,
         reserveCache.reserveLastUpdateTimestamp
       );
+      // 计算浮动借款利率（用于计算浮动借款贴现因子）
       reserveCache.nextVariableBorrowIndex = cumulatedVariableBorrowInterest.rayMul(
         reserveCache.currVariableBorrowIndex
       );
+      // 计算浮动借款指数
       reserve.variableBorrowIndex = reserveCache.nextVariableBorrowIndex.toUint128();
     }
   }
 
   /**
-   * @notice Creates a cache object to avoid repeated storage reads and external contract calls when updating state and
-   * interest rates.
+   * @notice Creates a cache object to avoid repeated storage reads and external contract calls when updating state and interest rates.(创建缓存对象，以避免在更新状态和时重复读取存储和调用外部合约利率)
    * @param reserve The reserve object for which the cache will be filled
    * @return The cache object
    */

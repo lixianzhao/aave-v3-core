@@ -154,14 +154,14 @@ library BorrowLogic {
     }
 
     emit Borrow(
-      params.asset,
-      params.user,
-      params.onBehalfOf,
-      params.amount,
-      params.interestRateMode,
+      params.asset, // reserve token
+      params.user, // from (合约调用者)
+      params.onBehalfOf, // 接手的
+      params.amount, // 借的数量wei
+      params.interestRateMode, // 利率模型 1稳定、2浮动
       params.interestRateMode == DataTypes.InterestRateMode.STABLE
         ? currentStableRate
-        : reserve.currentVariableBorrowRate,
+        : reserve.currentVariableBorrowRate, // borrowRate  用户借阅的数字比率，用ray表示
       params.referralCode
     );
   }
@@ -187,11 +187,12 @@ library BorrowLogic {
     DataTypes.ReserveCache memory reserveCache = reserve.cache();
     reserve.updateState(reserveCache);
 
+    // 获取 onBehalfOf该用户的 目前已经借的Token数（稳定、浮动）
     (uint256 stableDebt, uint256 variableDebt) = Helpers.getUserCurrentDebt(
       params.onBehalfOf,
       reserveCache
     );
-
+    // 检查输入amount、asset的状态、判断用户是否具有该类型的债务
     ValidationLogic.validateRepay(
       reserveCache,
       params.amount,
@@ -201,19 +202,22 @@ library BorrowLogic {
       variableDebt
     );
 
+    // 根据当前的 利率模式（稳定 、浮动），获取当前的债务数量
     uint256 paybackAmount = params.interestRateMode == DataTypes.InterestRateMode.STABLE
       ? stableDebt
       : variableDebt;
 
     // Allows a user to repay with aTokens without leaving dust from interest.
+    // 目前合约写死的是 false，所以不能用Atoken还款
     if (params.useATokens && params.amount == type(uint256).max) {
       params.amount = IAToken(reserveCache.aTokenAddress).balanceOf(msg.sender);
     }
-
+    // 部分还款 还是全部还款
     if (params.amount < paybackAmount) {
       paybackAmount = params.amount;
     }
 
+    // burn掉相应的 debtToken
     if (params.interestRateMode == DataTypes.InterestRateMode.STABLE) {
       (reserveCache.nextTotalStableDebt, reserveCache.nextAvgStableBorrowRate) = IStableDebtToken(
         reserveCache.stableDebtTokenAddress
@@ -230,11 +234,11 @@ library BorrowLogic {
       params.useATokens ? 0 : paybackAmount,
       0
     );
-
+    // 全部还清了
     if (stableDebt + variableDebt - paybackAmount == 0) {
       userConfig.setBorrowing(reserve.id, false);
     }
-
+    // 如果抵押的资产是
     IsolationModeLogic.updateIsolatedDebtIfIsolated(
       reservesData,
       reservesList,
@@ -243,6 +247,7 @@ library BorrowLogic {
       paybackAmount
     );
 
+    // useATokens写死的false
     if (params.useATokens) {
       IAToken(reserveCache.aTokenAddress).burn(
         msg.sender,
@@ -251,7 +256,9 @@ library BorrowLogic {
         reserveCache.nextLiquidityIndex
       );
     } else {
+      // 将要还的asset 转移给对应的 aToken
       IERC20(params.asset).safeTransferFrom(msg.sender, reserveCache.aTokenAddress, paybackAmount);
+      // 权限控制（只能是Pool可以操作）
       IAToken(reserveCache.aTokenAddress).handleRepayment(
         msg.sender,
         params.onBehalfOf,

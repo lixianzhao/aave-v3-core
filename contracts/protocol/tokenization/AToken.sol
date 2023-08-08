@@ -163,7 +163,7 @@ contract AToken is VersionedInitializable, ScaledBalanceTokenBase, EIP712Base, I
     address onBehalfOf,
     uint256 amount
   ) external virtual override onlyPool {
-    // Intentionally left blank
+    // Intentionally left blank（故意留空）
   }
 
   /// @inheritdoc IAToken

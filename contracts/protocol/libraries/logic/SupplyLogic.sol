@@ -39,15 +39,15 @@ library SupplyLogic {
     uint16 indexed referralCode
   );
 
-  /**
+  /** 实现供应特性。通过' supply() '，用户向Aave协议提供资产。
    * @notice Implements the supply feature. Through `supply()`, users supply assets to the Aave protocol.
    * @dev Emits the `Supply()` event.
    * @dev In the first supply action, `ReserveUsedAsCollateralEnabled()` is emitted, if the asset can be enabled as
    * collateral.
-   * @param reservesData The state of all the reserves
-   * @param reservesList The addresses of all the active reserves
-   * @param userConfig The user configuration mapping that tracks the supplied/borrowed assets
-   * @param params The additional parameters needed to execute the supply function
+   * @param reservesData The state of all the reserves  质押品相关数据
+   * @param reservesList The addresses of all the active reserves  质押品ID与地址的对应关系
+   * @param userConfig The user configuration mapping that tracks the supplied/borrowed assets  用户的借贷存储数据
+   * @param params The additional parameters needed to execute the supply function 用户在supply函数内输入的参数的打包
    */
   function executeSupply(
     mapping(address => DataTypes.ReserveData) storage reservesData,
@@ -55,25 +55,30 @@ library SupplyLogic {
     DataTypes.UserConfigurationMap storage userConfig,
     DataTypes.ExecuteSupplyParams memory params
   ) external {
+    // 资产的储备数据
     DataTypes.ReserveData storage reserve = reservesData[params.asset];
+    // 创建缓存对象，以避免在更新状态和时重复读取存储和调用外部合约利率
     DataTypes.ReserveCache memory reserveCache = reserve.cache();
 
     reserve.updateState(reserveCache);
-
+    // asset是否被冻结、暂停等状态；amount是否超出上限
     ValidationLogic.validateSupply(reserveCache, reserve, params.amount);
-
+    // 更新利率
     reserve.updateInterestRates(reserveCache, params.asset, params.amount, 0);
-
+    // 当用户存入资产时，用户资产会被转移到流动性池内
+    // asset 质押的token address，质押的数量 amount
     IERC20(params.asset).safeTransferFrom(msg.sender, reserveCache.aTokenAddress, params.amount);
 
+    // Aave是一个借贷平台，AToken属于存款凭证，当用户存入资产时，Aave会给用户mint一定数量的AToken
     bool isFirstSupply = IAToken(reserveCache.aTokenAddress).mint(
       msg.sender,
       params.onBehalfOf,
       params.amount,
       reserveCache.nextLiquidityIndex
     );
-
+    // 是否首次存款该类型的Asset
     if (isFirstSupply) {
+      // 隔离模式的资产 不能自动开启作为抵押物
       if (
         ValidationLogic.validateAutomaticUseAsCollateral(
           reservesData,
@@ -114,21 +119,22 @@ library SupplyLogic {
     DataTypes.ReserveCache memory reserveCache = reserve.cache();
 
     reserve.updateState(reserveCache);
-
+    // Atoken的余额
     uint256 userBalance = IAToken(reserveCache.aTokenAddress).scaledBalanceOf(msg.sender).rayMul(
       reserveCache.nextLiquidityIndex
     );
 
     uint256 amountToWithdraw = params.amount;
-
+    // 全部提取
     if (params.amount == type(uint256).max) {
       amountToWithdraw = userBalance;
     }
-
+    // 验证资产的状态是可用的
     ValidationLogic.validateWithdraw(reserveCache, amountToWithdraw, userBalance);
 
     reserve.updateInterestRates(reserveCache, params.asset, 0, amountToWithdraw);
 
+    // 是否正在用于作为抵押物
     bool isCollateral = userConfig.isUsingAsCollateral(reserve.id);
 
     if (isCollateral && amountToWithdraw == userBalance) {
@@ -142,7 +148,7 @@ library SupplyLogic {
       amountToWithdraw,
       reserveCache.nextLiquidityIndex
     );
-
+    // 正在用作抵押物 && 正在借款
     if (isCollateral && userConfig.isBorrowingAny()) {
       ValidationLogic.validateHFAndLtv(
         reservesData,

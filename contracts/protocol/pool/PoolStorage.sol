@@ -9,7 +9,7 @@ import {DataTypes} from '../libraries/types/DataTypes.sol';
 /**
  * @title PoolStorage
  * @author Aave
- * @notice Contract used as storage of the Pool contract.
+ * @notice Contract used as storage of the Pool contract. 专门用来存储Pool的storage数据
  * @dev It defines the storage layout of the Pool contract.
  */
 contract PoolStorage {
@@ -18,9 +18,11 @@ contract PoolStorage {
   using UserConfiguration for DataTypes.UserConfigurationMap;
 
   // Map of reserves and their data (underlyingAssetOfReserve => reserveData)
+  // 储量映射及其数据 （相关资产的储备粮）
   mapping(address => DataTypes.ReserveData) internal _reserves;
 
   // Map of users address and their configuration data (userAddress => userConfiguration)
+  // 用户资产的使用和拥有情况
   mapping(address => DataTypes.UserConfigurationMap) internal _usersConfig;
 
   // List of reserves as a map (reserveId => reserve).
