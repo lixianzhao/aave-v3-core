@@ -69,15 +69,16 @@ abstract contract ScaledBalanceTokenBase is MintableIncentivizedERC20, IScaledBa
     uint256 amount,
     uint256 index // 数量的缩放比例。一般传入reserve.liquidityIndex
   ) internal returns (bool) {
+    // 我存入的Token 能够得到多少aToken
     uint256 amountScaled = amount.rayDiv(index);
     require(amountScaled != 0, Errors.INVALID_MINT_AMOUNT);
 
-    // 直接调用ERC20.balanceOf() 返回的是不计息的数量
+    // 调用ERC20.balanceOf() 返回的是不计息的数量
     uint256 scaledBalance = super.balanceOf(onBehalfOf);
-
+    // 增加的利息
     uint256 balanceIncrease = scaledBalance.rayMul(index) -
       scaledBalance.rayMul(_userState[onBehalfOf].additionalData);
-
+    // 更新贴心因子（汇率）
     _userState[onBehalfOf].additionalData = index.toUint128();
 
     _mint(onBehalfOf, amountScaled.toUint128());
@@ -99,6 +100,7 @@ abstract contract ScaledBalanceTokenBase is MintableIncentivizedERC20, IScaledBa
    * @param index The variable debt index of the reserve
    */
   function _burnScaled(address user, address target, uint256 amount, uint256 index) internal {
+    // 汇率增高 burn的Atoken肯定越少
     uint256 amountScaled = amount.rayDiv(index);
     require(amountScaled != 0, Errors.INVALID_BURN_AMOUNT);
 

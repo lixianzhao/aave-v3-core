@@ -361,6 +361,7 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
   }
 
   /// @inheritdoc IPool
+  // 设置用户的某一资产是否可以作为抵押物
   function setUserUseReserveAsCollateral(
     address asset,
     bool useAsCollateral

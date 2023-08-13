@@ -37,7 +37,7 @@ library ReserveLogic {
     uint256 variableBorrowIndex
   );
 
-  /**
+  /** 返回储备金正在进行的规范化收入（单利计算）
    * @notice Returns the ongoing normalized income for the reserve.
    * @dev A value of 1e27 means there is no income. As time passes, the income is accrued
    * @dev A value of 2*1e27 means for each unit of asset one unit of income has been accrued
@@ -174,8 +174,8 @@ library ReserveLogic {
     DataTypes.ReserveData storage reserve,
     DataTypes.ReserveCache memory reserveCache,
     address reserveAddress,
-    uint256 liquidityAdded,
-    uint256 liquidityTaken
+    uint256 liquidityAdded, // 流动性增加量，在此处为存入资产的数量
+    uint256 liquidityTaken // 流动性移除量，此变量用于贷出资产的情况，supply的时候是 0
   ) internal {
     UpdateInterestRatesLocalVars memory vars;
 
@@ -189,20 +189,22 @@ library ReserveLogic {
       vars.nextVariableRate
     ) = IReserveInterestRateStrategy(reserve.interestRateStrategyAddress).calculateInterestRates(
       DataTypes.CalculateInterestRatesParams({
-        unbacked: reserve.unbacked,
-        liquidityAdded: liquidityAdded,
-        liquidityTaken: liquidityTaken,
-        totalStableDebt: reserveCache.nextTotalStableDebt,
-        totalVariableDebt: vars.totalVariableDebt,
-        averageStableBorrowRate: reserveCache.nextAvgStableBorrowRate,
-        reserveFactor: reserveCache.reserveFactor,
-        reserve: reserveAddress,
-        aToken: reserveCache.aTokenAddress
+        unbacked: reserve.unbacked, // 无存入直接铸造的代币数量上限(此变量用于跨链)
+        liquidityAdded: liquidityAdded, // 流动性增加量，在此处为存入资产的数量
+        liquidityTaken: liquidityTaken, //  流动性移除量，此变量用于贷出资产的情况，supply的时候是 0
+        totalStableDebt: reserveCache.nextTotalStableDebt, // 固定利率总贷出量
+        totalVariableDebt: vars.totalVariableDebt, // 浮动利率总贷出量
+        averageStableBorrowRate: reserveCache.nextAvgStableBorrowRate, // 平均贷款固定利率
+        reserveFactor: reserveCache.reserveFactor, // 准备金比率
+        reserve: reserveAddress, // 存款Token地址
+        aToken: reserveCache.aTokenAddress // 对应的aToken 地址
       })
     );
-
+    // 当前存款利率
     reserve.currentLiquidityRate = vars.nextLiquidityRate.toUint128();
+    // 当前固定贷款利率
     reserve.currentStableBorrowRate = vars.nextStableRate.toUint128();
+    // 当前浮动贷款利率
     reserve.currentVariableBorrowRate = vars.nextVariableRate.toUint128();
 
     emit ReserveDataUpdated(
@@ -312,7 +314,7 @@ library ReserveLogic {
     // reserveCache.currVariableBorrowRate != 0 is not a correct validation,
     // because a positive base variable rate can be stored on
     // reserveCache.currVariableBorrowRate, but the index should not increase
-    // 可变借款指数只有在存在可变债务时才会更新。
+    // 浮动借款指数只有在存在浮动债务时才会更新。
     if (reserveCache.currScaledVariableDebt != 0) {
       // 计算复利
       uint256 cumulatedVariableBorrowInterest = MathUtils.calculateCompoundedInterest(
@@ -339,11 +341,16 @@ library ReserveLogic {
     DataTypes.ReserveCache memory reserveCache;
 
     reserveCache.reserveConfiguration = reserve.configuration;
+    // 获取储备系数
     reserveCache.reserveFactor = reserveCache.reserveConfiguration.getReserveFactor();
+    // 存款累计利率（贴现因子）
     reserveCache.currLiquidityIndex = reserveCache.nextLiquidityIndex = reserve.liquidityIndex;
+    // 浮动借款累计利率（贴现因子）
     reserveCache.currVariableBorrowIndex = reserveCache.nextVariableBorrowIndex = reserve
       .variableBorrowIndex;
+    // 当前存款利率
     reserveCache.currLiquidityRate = reserve.currentLiquidityRate;
+    // 当前浮动借款利率
     reserveCache.currVariableBorrowRate = reserve.currentVariableBorrowRate;
 
     reserveCache.aTokenAddress = reserve.aTokenAddress;
@@ -351,20 +358,21 @@ library ReserveLogic {
     reserveCache.variableDebtTokenAddress = reserve.variableDebtTokenAddress;
 
     reserveCache.reserveLastUpdateTimestamp = reserve.lastUpdateTimestamp;
-
+    // 当前可变利率贷款总额
     reserveCache.currScaledVariableDebt = reserveCache.nextScaledVariableDebt = IVariableDebtToken(
       reserveCache.variableDebtTokenAddress
     ).scaledTotalSupply();
 
     (
-      reserveCache.currPrincipalStableDebt,
-      reserveCache.currTotalStableDebt,
-      reserveCache.currAvgStableBorrowRate,
-      reserveCache.stableDebtLastUpdateTimestamp
+      reserveCache.currPrincipalStableDebt, // 当前已固定利率借入的本金(只是代币发行量)
+      reserveCache.currTotalStableDebt, // 当前以固定利率借出的总资产(即本金与利息之和)
+      reserveCache.currAvgStableBorrowRate, // 平均固定利率
+      reserveCache.stableDebtLastUpdateTimestamp // 固定利率更新时间
     ) = IStableDebtToken(reserveCache.stableDebtTokenAddress).getSupplyData();
 
     // by default the actions are considered as not affecting the debt balances.
     // if the action involves mint/burn of debt, the cache needs to be updated
+    // 此种类型缓存仅为了方便后期进行数据更新
     reserveCache.nextTotalStableDebt = reserveCache.currTotalStableDebt;
     reserveCache.nextAvgStableBorrowRate = reserveCache.currAvgStableBorrowRate;
 

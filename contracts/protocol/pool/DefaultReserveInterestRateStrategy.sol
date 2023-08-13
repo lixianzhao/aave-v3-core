@@ -164,29 +164,33 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
     CalcInterestRatesLocalVars memory vars;
     // 总债务 = 固定债务 + 浮动债务
     vars.totalDebt = params.totalStableDebt + params.totalVariableDebt;
-
+    // 初始化一个LR
     vars.currentLiquidityRate = 0;
+    // R0
     vars.currentVariableBorrowRate = _baseVariableBorrowRate;
     vars.currentStableBorrowRate = getBaseStableBorrowRate();
     // 有借款时
     if (vars.totalDebt != 0) {
-      // 固定贷款占用比例
+      // 计算ratio
       vars.stableToTotalDebtRatio = params.totalStableDebt.rayDiv(vars.totalDebt);
-
+      // 流动性资产总量 = 当前存款总量 + 本次新增的量（可以被借的量）
       vars.availableLiquidity =
         IERC20(params.reserve).balanceOf(params.aToken) +
         params.liquidityAdded -
         params.liquidityTaken;
-
+      // 计算当前总供给 Total supplied = 可用资产 + 总负债
       vars.availableLiquidityPlusDebt = vars.availableLiquidity + vars.totalDebt;
+      // 资金利用率 U =（借款/总供给量）
       vars.borrowUsageRatio = vars.totalDebt.rayDiv(vars.availableLiquidityPlusDebt);
+      // 暂时忽略
       vars.supplyUsageRatio = vars.totalDebt.rayDiv(
         vars.availableLiquidityPlusDebt + params.unbacked
       );
     }
+    // 上面代码 计算除了 ratio 、U
     // 当 U > 最佳利用率 （U_optimal）
     if (vars.borrowUsageRatio > OPTIMAL_USAGE_RATIO) {
-      // excessUtilizationRateRatio = (U - U_optimal)/ (1 - U_optimal )
+      // excessUtilizationRateRatio = (U_t - U_optimal)/ (1 - U_optimal )
       // 超过最佳利用率的比例
       uint256 excessBorrowUsageRatio = (vars.borrowUsageRatio - OPTIMAL_USAGE_RATIO).rayDiv(
         MAX_EXCESS_USAGE_RATIO
@@ -207,12 +211,12 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
         OPTIMAL_USAGE_RATIO
       );
 
-      // R_base(stable) + R_slope1 + R_slope2 * excessBorrowUsageRatio
+      // R_base + R_slope1 + R_slope2 * excessBorrowUsageRatio
       vars.currentVariableBorrowRate += _variableRateSlope1.rayMul(vars.borrowUsageRatio).rayDiv(
         OPTIMAL_USAGE_RATIO
       );
     }
-
+    // currentStableBorrowRate = currentStableBorrowRate + (ratio - O_ratio)/1 - O_ratio
     if (vars.stableToTotalDebtRatio > OPTIMAL_STABLE_TO_TOTAL_DEBT_RATIO) {
       uint256 excessStableDebtRatio = (vars.stableToTotalDebtRatio -
         OPTIMAL_STABLE_TO_TOTAL_DEBT_RATIO).rayDiv(MAX_EXCESS_STABLE_TO_TOTAL_DEBT_RATIO);
@@ -238,7 +242,7 @@ contract DefaultReserveInterestRateStrategy is IDefaultInterestRateStrategy {
     );
   }
 
-  /**
+  /** 总可变债务和总稳定债务之间的加权平均值
    * @dev Calculates the overall borrow rate as the weighted average between the total variable debt and total stable
    * debt
    * @param totalStableDebt The total borrowed from the reserve at a stable rate

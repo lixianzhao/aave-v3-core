@@ -46,7 +46,7 @@ library GenericLogic {
     bool isInEModeCategory;
   }
 
-  /**
+  /** 计算整个储备的用户数据。
    * @notice Calculates the user data across the reserves.
    * @dev It includes the total liquidity/collateral/borrow balances in the base currency used by the price feed,
    * the average Loan To Value, the average Liquidation Ratio, and the Health factor.
@@ -73,7 +73,7 @@ library GenericLogic {
     }
 
     CalculateUserAccountDataVars memory vars;
-
+    // 当前处于高效模式
     if (params.userEModeCategory != 0) {
       (vars.eModeLtv, vars.eModeLiqThreshold, vars.eModeAssetPrice) = EModeLogic
         .getEModeConfiguration(
@@ -81,8 +81,10 @@ library GenericLogic {
           IPriceOracleGetter(params.oracle)
         );
     }
-
+    // 循环所有的资产
     while (vars.i < params.reservesCount) {
+      // 判断是否把当前资产作为抵押物 或者 正在借用当前资产
+      // 如果既不是抵押物 也没借款 直接跳过
       if (!params.userConfig.isUsingAsCollateralOrBorrowing(vars.i)) {
         unchecked {
           ++vars.i;
@@ -91,14 +93,14 @@ library GenericLogic {
       }
 
       vars.currentReserveAddress = reservesList[vars.i];
-
+      // 地址的合法性
       if (vars.currentReserveAddress == address(0)) {
         unchecked {
           ++vars.i;
         }
         continue;
       }
-
+      // asset的最新数据
       DataTypes.ReserveData storage currentReserve = reservesData[vars.currentReserveAddress];
 
       (
@@ -113,12 +115,12 @@ library GenericLogic {
       unchecked {
         vars.assetUnit = 10 ** vars.decimals;
       }
-
+      // 当前资产的价格
       vars.assetPrice = vars.eModeAssetPrice != 0 &&
         params.userEModeCategory == vars.eModeAssetCategory
         ? vars.eModeAssetPrice
-        : IPriceOracleGetter(params.oracle).getAssetPrice(vars.currentReserveAddress);
-
+        : IPriceOracleGetter(params.oracle).getAssetPrice(vars.currentReserveAddress); // 返回以基础货币表示的资产价格
+      // 有清算阈值 && 将该资产设置为抵押物
       if (vars.liquidationThreshold != 0 && params.userConfig.isUsingAsCollateral(vars.i)) {
         vars.userBalanceInBaseCurrency = _getUserBalanceInBaseCurrency(
           params.user,
@@ -128,7 +130,7 @@ library GenericLogic {
         );
 
         vars.totalCollateralInBaseCurrency += vars.userBalanceInBaseCurrency;
-
+        // 是否在高效模式
         vars.isInEModeCategory = EModeLogic.isInEModeCategory(
           params.userEModeCategory,
           vars.eModeAssetCategory
@@ -146,7 +148,7 @@ library GenericLogic {
           vars.userBalanceInBaseCurrency *
           (vars.isInEModeCategory ? vars.eModeLiqThreshold : vars.liquidationThreshold);
       }
-
+      // 如果用户正在借用改资产
       if (params.userConfig.isBorrowing(vars.i)) {
         vars.totalDebtInBaseCurrency += _getUserDebtInBaseCurrency(
           params.user,
@@ -242,7 +244,7 @@ library GenericLogic {
     }
   }
 
-  /**
+  /** 计算用户的总token余额，以价格oracle使用的基于货币计算
    * @notice Calculates total aToken balance of the user in the based currency used by the price oracle
    * @dev For gas reasons, the aToken balance is calculated by fetching `scaledBalancesOf` normalized debt, which
    * is cheaper than fetching `balanceOf`

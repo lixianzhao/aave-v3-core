@@ -40,7 +40,7 @@ library UserConfiguration {
     }
   }
 
-  /** 设置用户是否使用由reserveIndex标识的储备作为抵押品
+  /** 设置用户是否使用由reserveIndex标识的储备作为抵押品（页面Your supplies 模块进行设置）
    * @notice Sets if the user is using as collateral the reserve identified by reserveIndex
    * @param self The configuration object
    * @param reserveIndex The index of the reserve in the bitmap
@@ -94,7 +94,7 @@ library UserConfiguration {
     }
   }
 
-  /** 验证用户是否正在使用该资产作为抵押物
+  /** 验证用户是将该资产设置为抵押物
    * @notice Validate a user has been using the reserve as collateral
    * @param self The configuration object
    * @param reserveIndex The index of the reserve in the bitmap
@@ -163,7 +163,7 @@ library UserConfiguration {
     return self.data == 0;
   }
 
-  /**
+  /** 返回当前用户是否拥有隔离模式的资产(supply的)
    * @notice Returns the Isolation Mode state of the user
    * @param self The configuration object
    * @param reservesData The state of all the reserves
@@ -172,7 +172,6 @@ library UserConfiguration {
    * @return The address of the only asset used as collateral
    * @return The debt ceiling of the reserve
    */
-  // 返回当前用户是否拥有隔离模式的资产
   function getIsolationModeState(
     DataTypes.UserConfigurationMap memory self,
     mapping(address => DataTypes.ReserveData) storage reservesData,
@@ -192,7 +191,7 @@ library UserConfiguration {
         return (true, assetAddress, ceiling);
       }
     }
-    // 有多个可用的抵押资产，肯定不是隔离模式了
+    // 有多个可用的抵押资产或者没有任何资产，肯定不是隔离模式了
     return (false, address(0), 0);
   }
 

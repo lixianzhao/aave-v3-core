@@ -578,7 +578,8 @@ library ReserveConfiguration {
    * @return The state param representing eMode category
    */
   function getParams(
-    DataTypes.ReserveConfigurationMap memory self
+    DataTypes.
+     memory self
   ) internal pure returns (uint256, uint256, uint256, uint256, uint256, uint256) {
     uint256 dataLocal = self.data;
 

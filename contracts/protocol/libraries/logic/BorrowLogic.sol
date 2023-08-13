@@ -67,7 +67,7 @@ library BorrowLogic {
   function executeBorrow(
     mapping(address => DataTypes.ReserveData) storage reservesData,
     mapping(uint256 => address) storage reservesList,
-    mapping(uint8 => DataTypes.EModeCategory) storage eModeCategories,
+    mapping(uint8 => DataTypes.EModeCategory) storage eModeCategories, // 所有效率模式类别的配置
     DataTypes.UserConfigurationMap storage userConfig,
     DataTypes.ExecuteBorrowParams memory params
   ) public {
@@ -75,7 +75,7 @@ library BorrowLogic {
     DataTypes.ReserveCache memory reserveCache = reserve.cache();
 
     reserve.updateState(reserveCache);
-
+    // 判断用户是否处于隔离模式（具有一笔隔离模式的抵押物-已启用的）
     (
       bool isolationModeActive,
       address isolationModeCollateralAddress,
@@ -106,7 +106,7 @@ library BorrowLogic {
 
     uint256 currentStableRate = 0;
     bool isFirstBorrowing = false;
-
+    // 稳定利率借贷
     if (params.interestRateMode == DataTypes.InterestRateMode.STABLE) {
       currentStableRate = reserve.currentStableBorrowRate;
 
@@ -129,7 +129,7 @@ library BorrowLogic {
     if (isFirstBorrowing) {
       userConfig.setBorrowing(reserve.id, true);
     }
-
+    // 是不是隔离模式
     if (isolationModeActive) {
       uint256 nextIsolationModeTotalDebt = reservesData[isolationModeCollateralAddress]
         .isolationModeTotalDebt += (params.amount /
@@ -145,11 +145,12 @@ library BorrowLogic {
     reserve.updateInterestRates(
       reserveCache,
       params.asset,
-      0,
-      params.releaseUnderlying ? params.amount : 0
+      0, // 增加流动性
+      params.releaseUnderlying ? params.amount : 0 // 移除流动性
     );
 
     if (params.releaseUnderlying) {
+      // 将借的token转给 user，因为supply的钱都是转给了Atoken 所以借也是从这里借
       IAToken(reserveCache.aTokenAddress).transferUnderlyingTo(params.user, params.amount);
     }
 
@@ -238,7 +239,7 @@ library BorrowLogic {
     if (stableDebt + variableDebt - paybackAmount == 0) {
       userConfig.setBorrowing(reserve.id, false);
     }
-    // 如果抵押的资产是
+
     IsolationModeLogic.updateIsolatedDebtIfIsolated(
       reservesData,
       reservesList,

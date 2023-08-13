@@ -55,6 +55,7 @@ abstract contract MintableIncentivizedERC20 is IncentivizedERC20 {
     _totalSupply = oldTotalSupply - amount;
 
     uint128 oldAccountBalance = _userState[account].balance;
+
     _userState[account].balance = oldAccountBalance - amount;
 
     IAaveIncentivesController incentivesControllerLocal = _incentivesController;

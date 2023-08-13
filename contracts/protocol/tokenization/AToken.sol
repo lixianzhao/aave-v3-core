@@ -101,6 +101,7 @@ contract AToken is VersionedInitializable, ScaledBalanceTokenBase, EIP712Base, I
   ) external virtual override onlyPool {
     _burnScaled(from, receiverOfUnderlying, amount, index);
     if (receiverOfUnderlying != address(this)) {
+      // _underlyingAsset 就是要提取的资产
       IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
     }
   }
@@ -154,6 +155,7 @@ contract AToken is VersionedInitializable, ScaledBalanceTokenBase, EIP712Base, I
 
   /// @inheritdoc IAToken
   function transferUnderlyingTo(address target, uint256 amount) external virtual override onlyPool {
+    // _underlyingAsset 就是要借的token
     IERC20(_underlyingAsset).safeTransfer(target, amount);
   }
 

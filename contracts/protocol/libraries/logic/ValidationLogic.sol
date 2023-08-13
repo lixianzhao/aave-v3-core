@@ -150,7 +150,7 @@ library ValidationLogic {
     (
       vars.isActive,
       vars.isFrozen,
-      vars.borrowingEnabled,
+      vars.borrowingEnabled, // Pool的管理员设置
       vars.stableRateBorrowingEnabled,
       vars.isPaused
     ) = params.reserveCache.reserveConfiguration.getFlags();
@@ -214,7 +214,7 @@ library ValidationLogic {
       );
     }
     // 高效模式
-    // 高效模式会自定义自己的 LTV 清算阈值等
+    // 高效模式会自定义自己的 LTV 清算阈值 价格等
     if (params.userEModeCategory != 0) {
       require(
         params.reserveCache.reserveConfiguration.getEModeCategory() == params.userEModeCategory,
@@ -223,6 +223,7 @@ library ValidationLogic {
       vars.eModePriceSource = eModeCategories[params.userEModeCategory].priceSource;
     }
     // 以上都是检测池子状态
+
     // 接下来是检测用户的状态
     (
       vars.userCollateralInBaseCurrency,
@@ -246,7 +247,7 @@ library ValidationLogic {
 
     require(vars.userCollateralInBaseCurrency != 0, Errors.COLLATERAL_BALANCE_IS_ZERO);
     require(vars.currentLtv != 0, Errors.LTV_VALIDATION_FAILED);
-
+    // 健康因子 > 1
     require(
       vars.healthFactor > HEALTH_FACTOR_LIQUIDATION_THRESHOLD,
       Errors.HEALTH_FACTOR_LOWER_THAN_LIQUIDATION_THRESHOLD
@@ -261,35 +262,37 @@ library ValidationLogic {
       vars.amountInBaseCurrency /= vars.assetUnit;
     }
 
-    //add the current already borrowed amount to the amount requested to calculate the total collateral needed.
+    //add the current already borrowed amount to the amount requested to calculate the total collateral needed. 将当前已借入的金额与要求的金额相加，计算所需的总抵押品
     vars.collateralNeededInBaseCurrency = (vars.userDebtInBaseCurrency + vars.amountInBaseCurrency)
       .percentDiv(vars.currentLtv); //LTV is calculated in percentage
-
+    // There is not enough collateral to cover a new borrow
     require(
       vars.collateralNeededInBaseCurrency <= vars.userCollateralInBaseCurrency,
       Errors.COLLATERAL_CANNOT_COVER_NEW_BORROW
     );
 
-    /**
+    /** 稳定利率借贷 需要满足以下条件
      * Following conditions need to be met if the user is borrowing at a stable rate:
-     * 1. Reserve must be enabled for stable rate borrowing
+     * 1. Reserve must be enabled for stable rate borrowing 准备金必须能够用于稳定利率的借贷
      * 2. Users cannot borrow from the reserve if their collateral is (mostly) the same currency
-     *    they are borrowing, to prevent abuses.
-     * 3. Users will be able to borrow only a portion of the total available liquidity
+     *    they are borrowing, to prevent abuses.如果用户的抵押品(大部分)是同一种货币，他们就不能从准备金中借款。
+          他们正在借钱，以防止滥用    
+     * 3. Users will be able to borrow only a portion of the total available liquidity 
+          用户将只能借到总可用流动性的一部分
      */
-
+    // 稳定利率借贷
     if (params.interestRateMode == DataTypes.InterestRateMode.STABLE) {
       //check if the borrow mode is stable and if stable rate borrowing is enabled on this reserve
-
+      // 满足第一个条件
       require(vars.stableRateBorrowingEnabled, Errors.STABLE_BORROWING_NOT_ENABLED);
-
+      // 需要借的资产不能作为抵押物 || 当前的LTV是 0 ||
       require(
         !params.userConfig.isUsingAsCollateral(reservesData[params.asset].id) ||
           params.reserveCache.reserveConfiguration.getLtv() == 0 ||
           params.amount > IERC20(params.reserveCache.aTokenAddress).balanceOf(params.userAddress),
         Errors.COLLATERAL_SAME_AS_BORROWING_CURRENCY
       );
-
+      //
       vars.availableLiquidity = IERC20(params.asset).balanceOf(params.reserveCache.aTokenAddress);
 
       //calculate the max available loan size in stable rate mode as a percentage of the
@@ -298,8 +301,9 @@ library ValidationLogic {
 
       require(params.amount <= maxLoanSizeStable, Errors.AMOUNT_BIGGER_THAN_MAX_LOAN_SIZE_STABLE);
     }
-
+    // 如果当前用户还有其他的借贷
     if (params.userConfig.isBorrowingAny()) {
+      // 借贷自查 是不是 孤独模式
       (vars.siloedBorrowingEnabled, vars.siloedBorrowingAddress) = params
         .userConfig
         .getSiloedBorrowingState(reservesData, reservesList);

@@ -57,7 +57,7 @@ library SupplyLogic {
   ) external {
     // 资产的储备数据
     DataTypes.ReserveData storage reserve = reservesData[params.asset];
-    // 创建缓存对象，以避免在更新状态和时重复读取存储和调用外部合约利率
+    // 创建缓存对象
     DataTypes.ReserveCache memory reserveCache = reserve.cache();
 
     reserve.updateState(reserveCache);
@@ -119,7 +119,7 @@ library SupplyLogic {
     DataTypes.ReserveCache memory reserveCache = reserve.cache();
 
     reserve.updateState(reserveCache);
-    // Atoken的余额
+    // Atoken的余额，进行贴现 比如最初存了500个aToken ，随着利息的增加 LI已经变成了1.2这个时候 500 * 1.2 = 600
     uint256 userBalance = IAToken(reserveCache.aTokenAddress).scaledBalanceOf(msg.sender).rayMul(
       reserveCache.nextLiquidityIndex
     );
@@ -134,10 +134,11 @@ library SupplyLogic {
 
     reserve.updateInterestRates(reserveCache, params.asset, 0, amountToWithdraw);
 
-    // 是否正在用于作为抵押物
+    // 该资产的状态 是否已设置为抵押物 （页面 Your supplies模块上进行设置）
     bool isCollateral = userConfig.isUsingAsCollateral(reserve.id);
-
+    // 是抵押物 && 需要全部提取出来
     if (isCollateral && amountToWithdraw == userBalance) {
+      // 因为该资产已经全部提取了，所以这里要设置为false
       userConfig.setUsingAsCollateral(reserve.id, false);
       emit ReserveUsedAsCollateralDisabled(params.asset, msg.sender);
     }
@@ -148,7 +149,7 @@ library SupplyLogic {
       amountToWithdraw,
       reserveCache.nextLiquidityIndex
     );
-    // 正在用作抵押物 && 正在借款
+    // 是抵押物 && 有借款 （这个时候可能无法进行提取）这个时候要看HF 因为小于1 要被清算
     if (isCollateral && userConfig.isBorrowingAny()) {
       ValidationLogic.validateHFAndLtv(
         reservesData,
@@ -280,7 +281,7 @@ library SupplyLogic {
         ),
         Errors.USER_IN_ISOLATION_MODE_OR_LTV_ZERO
       );
-
+      // 作为抵押物
       userConfig.setUsingAsCollateral(reserve.id, true);
       emit ReserveUsedAsCollateralEnabled(asset, msg.sender);
     } else {
