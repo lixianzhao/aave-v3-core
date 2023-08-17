@@ -99,7 +99,7 @@ library ReserveLogic {
     if (reserve.lastUpdateTimestamp == uint40(block.timestamp)) {
       return;
     }
-    //  更新Index系列变量（贴现变量）
+    // 更新Index系列变量（贴现变量）
     _updateIndexes(reserve, reserveCache);
     // 更新风险准备金
     _accrueToTreasury(reserve, reserveCache);
@@ -331,7 +331,7 @@ library ReserveLogic {
   }
 
   /**
-   * @notice Creates a cache object to avoid repeated storage reads and external contract calls when updating state and interest rates.(创建缓存对象，以避免在更新状态和时重复读取存储和调用外部合约利率)
+   * @notice Creates a cache object to avoid repeated storage reads and external contract calls when updating state and interest rates.(创建缓存对象，以避免在更新状态和时重复读取storage和调用外部合约利率)
    * @param reserve The reserve object for which the cache will be filled
    * @return The cache object
    */

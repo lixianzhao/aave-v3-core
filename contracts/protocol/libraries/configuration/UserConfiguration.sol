@@ -208,7 +208,9 @@ library UserConfiguration {
     mapping(address => DataTypes.ReserveData) storage reservesData,
     mapping(uint256 => address) storage reservesList
   ) internal view returns (bool, address) {
+    // 只借了一种
     if (isBorrowingOne(self)) {
+      // 因为只借了一种，拿第一个asset就行
       uint256 assetId = _getFirstAssetIdByMask(self, BORROWING_MASK);
       address assetAddress = reservesList[assetId];
       if (reservesData[assetAddress].configuration.getSiloedBorrowing()) {

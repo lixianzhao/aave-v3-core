@@ -57,11 +57,11 @@ library SupplyLogic {
   ) external {
     // 资产的储备数据
     DataTypes.ReserveData storage reserve = reservesData[params.asset];
-    // 创建缓存对象
+    // 创建缓存对象(为了节省gas)
     DataTypes.ReserveCache memory reserveCache = reserve.cache();
 
     reserve.updateState(reserveCache);
-    // asset是否被冻结、暂停等状态；amount是否超出上限
+    // asset是否被冻结、暂停等状态；是否超出supply上限
     ValidationLogic.validateSupply(reserveCache, reserve, params.amount);
     // 更新利率
     reserve.updateInterestRates(reserveCache, params.asset, params.amount, 0);
@@ -78,7 +78,7 @@ library SupplyLogic {
     );
     // 是否首次存款该类型的Asset
     if (isFirstSupply) {
-      // 隔离模式的资产 不能自动开启作为抵押物
+      // 判断是否可以自动作为抵押物（隔离模式的资产不能自动开启作为抵押物）
       if (
         ValidationLogic.validateAutomaticUseAsCollateral(
           reservesData,

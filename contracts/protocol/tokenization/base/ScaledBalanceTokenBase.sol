@@ -55,6 +55,11 @@ abstract contract ScaledBalanceTokenBase is MintableIncentivizedERC20, IScaledBa
     return _userState[user].additionalData;
   }
 
+  // struct UserState {
+  //   uint128 balance; // 用户的aToken
+  //   uint128 additionalData; // 对应的的LI
+  // }
+
   /**
    * @notice Implements the basic logic to mint a scaled balance token.
    * @param caller The address performing the mint
@@ -67,18 +72,18 @@ abstract contract ScaledBalanceTokenBase is MintableIncentivizedERC20, IScaledBa
     address caller,
     address onBehalfOf,
     uint256 amount,
-    uint256 index // 数量的缩放比例。一般传入reserve.liquidityIndex
+    uint256 index // 数量的缩放比例（汇率）
   ) internal returns (bool) {
     // 我存入的Token 能够得到多少aToken
     uint256 amountScaled = amount.rayDiv(index);
     require(amountScaled != 0, Errors.INVALID_MINT_AMOUNT);
 
-    // 调用ERC20.balanceOf() 返回的是不计息的数量
+    // 调用ERC20.balanceOf() 返回的是Atoken的数量
     uint256 scaledBalance = super.balanceOf(onBehalfOf);
     // 增加的利息
     uint256 balanceIncrease = scaledBalance.rayMul(index) -
       scaledBalance.rayMul(_userState[onBehalfOf].additionalData);
-    // 更新贴心因子（汇率）
+    // 更新贴贴现因子（汇率）
     _userState[onBehalfOf].additionalData = index.toUint128();
 
     _mint(onBehalfOf, amountScaled.toUint128());

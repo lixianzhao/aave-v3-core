@@ -75,6 +75,7 @@ library GenericLogic {
     CalculateUserAccountDataVars memory vars;
     // 当前处于高效模式
     if (params.userEModeCategory != 0) {
+      // vars.eModeAssetPrice 针对高效模式设置的价格
       (vars.eModeLtv, vars.eModeLiqThreshold, vars.eModeAssetPrice) = EModeLogic
         .getEModeConfiguration(
           eModeCategories[params.userEModeCategory],
@@ -84,7 +85,7 @@ library GenericLogic {
     // 循环所有的资产
     while (vars.i < params.reservesCount) {
       // 判断是否把当前资产作为抵押物 或者 正在借用当前资产
-      // 如果既不是抵押物 也没借款 直接跳过
+      // 如果该资产既不是用户的抵押物 也没借款 直接跳过
       if (!params.userConfig.isUsingAsCollateralOrBorrowing(vars.i)) {
         unchecked {
           ++vars.i;
@@ -115,41 +116,45 @@ library GenericLogic {
       unchecked {
         vars.assetUnit = 10 ** vars.decimals;
       }
-      // 当前资产的价格
+      // 当前资产的价格（已U计算）
       vars.assetPrice = vars.eModeAssetPrice != 0 &&
         params.userEModeCategory == vars.eModeAssetCategory
         ? vars.eModeAssetPrice
-        : IPriceOracleGetter(params.oracle).getAssetPrice(vars.currentReserveAddress); // 返回以基础货币表示的资产价格
+        : IPriceOracleGetter(params.oracle).getAssetPrice(vars.currentReserveAddress); // 返回以基础货币表示的资产价格（AaveOracle.getAssetPrice）
+
       // 有清算阈值 && 将该资产设置为抵押物
       if (vars.liquidationThreshold != 0 && params.userConfig.isUsingAsCollateral(vars.i)) {
+        // 获取当前用户质押资产的价值（用于累加所有的抵押物资产）
         vars.userBalanceInBaseCurrency = _getUserBalanceInBaseCurrency(
           params.user,
           currentReserve,
           vars.assetPrice,
           vars.assetUnit
         );
-
+        //  累加计入总质押品价值
         vars.totalCollateralInBaseCurrency += vars.userBalanceInBaseCurrency;
-        // 是否在高效模式
+        // 判断当前资产是否与用户 EMode 相匹配
         vars.isInEModeCategory = EModeLogic.isInEModeCategory(
           params.userEModeCategory,
           vars.eModeAssetCategory
         );
-
+        // 计算 平均 ltv
         if (vars.ltv != 0) {
+          // 当前资产可以借出来的钱
           vars.avgLtv +=
             vars.userBalanceInBaseCurrency *
             (vars.isInEModeCategory ? vars.eModeLtv : vars.ltv);
         } else {
           vars.hasZeroLtvCollateral = true;
         }
-
+        // 计算平均清算阈值
         vars.avgLiquidationThreshold +=
           vars.userBalanceInBaseCurrency *
           (vars.isInEModeCategory ? vars.eModeLiqThreshold : vars.liquidationThreshold);
       }
-      // 如果用户正在借用改资产
+      // 如果用户正在借用该资产
       if (params.userConfig.isBorrowing(vars.i)) {
+        // 获取当前资产价值（累加所有的债务）
         vars.totalDebtInBaseCurrency += _getUserDebtInBaseCurrency(
           params.user,
           currentReserve,
@@ -164,14 +169,17 @@ library GenericLogic {
     }
 
     unchecked {
+      // 平均LTV（LTV= 总的借出的价值/总的用户质押的价值） 和 平均清算阈值
       vars.avgLtv = vars.totalCollateralInBaseCurrency != 0
         ? vars.avgLtv / vars.totalCollateralInBaseCurrency
         : 0;
+      // 平均阈值同上
       vars.avgLiquidationThreshold = vars.totalCollateralInBaseCurrency != 0
         ? vars.avgLiquidationThreshold / vars.totalCollateralInBaseCurrency
         : 0;
     }
-
+    // 健康因子：清算阈值(LT) / （贷出资产价值（DV）/ 质押品价值比值(SV)）
+    // 公式变形 就是 LT * SV / DV  对应下面的代码
     vars.healthFactor = (vars.totalDebtInBaseCurrency == 0)
       ? type(uint256).max
       : (vars.totalCollateralInBaseCurrency.percentMul(vars.avgLiquidationThreshold)).wadDiv(
@@ -260,13 +268,15 @@ library GenericLogic {
     uint256 assetPrice,
     uint256 assetUnit
   ) private view returns (uint256) {
+    // 用户的存款贴现因子（汇率）
     uint256 normalizedIncome = reserve.getNormalizedIncome();
+    // 用户存的该资产，现在价值
     uint256 balance = (
       IScaledBalanceToken(reserve.aTokenAddress).scaledBalanceOf(user).rayMul(normalizedIncome)
     ) * assetPrice;
 
     unchecked {
-      return balance / assetUnit;
+      return balance / assetUnit; // 换算成1个资产多少U（单位是wei）
     }
   }
 }

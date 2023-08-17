@@ -40,8 +40,8 @@ library DataTypes {
     //the outstanding unbacked aTokens minted through the bridging feature
     // 通过桥接功能铸造的未偿还的无担保代币
     uint128 unbacked;
-    //the outstanding debt borrowed against this asset in isolation mode
-    // 以该资产借入的未偿债务的单独模式
+    // the outstanding debt borrowed against this asset in isolation mode
+    // 该隔离模式的资产已借贷的债务
     uint128 isolationModeTotalDebt;
   }
 
@@ -59,7 +59,7 @@ library DataTypes {
     //bit 62: siloed borrowing enabled 支持孤立借贷
     //bit 63: flashloaning enabled
     //bit 64-79: reserve factor 	储备系数（此系数规定将协议中的一部分收益分配给AAVE违约准备金，用于支持安全模块，所以波动性越低的资产，储备系数越小，类似传统金融中的投资者保障基金提取交易手续费的操作）
-    //bit 80-115 borrow cap in whole tokens, borrowCap == 0 => no cap 代币贷出上限
+    //bit 80-115 borrow cap in whole tokens, borrowCap == 0 => no cap 代币贷出上限，0 标识无上限
     //bit 116-151 supply cap in whole tokens, supplyCap == 0 => no cap 代币存款上限
     //bit 152-167 liquidation protocol fee 在清算过程中，AAVE收取的费用
     //bit 168-175 eMode category E-Mode 类别
@@ -84,7 +84,7 @@ library DataTypes {
     uint16 ltv;
     uint16 liquidationThreshold;
     uint16 liquidationBonus;
-    // each eMode category may or may not have a custom oracle to override the individual assets price oracles
+    // each eMode category may or may not have a custom oracle to override the individual assets price oracles 每个eMode类别可能有也可能没有自定义预言机来覆盖单个资产价格预言机
     address priceSource;
     string label;
   }

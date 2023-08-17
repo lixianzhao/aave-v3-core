@@ -254,7 +254,7 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
         releaseUnderlying: true,
         maxStableRateBorrowSizePercent: _maxStableRateBorrowSizePercent,
         reservesCount: _reservesCount,
-        oracle: ADDRESSES_PROVIDER.getPriceOracle(),
+        oracle: ADDRESSES_PROVIDER.getPriceOracle(), // AaveOracle address
         userEModeCategory: _usersEModeCategory[onBehalfOf],
         priceOracleSentinel: ADDRESSES_PROVIDER.getPriceOracleSentinel()
       })

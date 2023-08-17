@@ -79,6 +79,7 @@ library ValidationLogic {
 
     // 获取supply的上限
     uint256 supplyCap = reserveCache.reserveConfiguration.getSupplyCap();
+    // 0 表示无上限
     require(
       supplyCap == 0 ||
         ((IAToken(reserveCache.aTokenAddress).scaledTotalSupply() +
@@ -166,7 +167,7 @@ library ValidationLogic {
       Errors.PRICE_ORACLE_SENTINEL_CHECK_FAILED
     );
 
-    //validate interest rate mode
+    // validate interest rate mode
     // 检测利率模型
     require(
       params.interestRateMode == DataTypes.InterestRateMode.VARIABLE ||
@@ -180,7 +181,7 @@ library ValidationLogic {
     unchecked {
       vars.assetUnit = 10 ** vars.reserveDecimals;
     }
-
+    // 等于 0  就是没有上限
     if (vars.borrowCap != 0) {
       vars.totalSupplyVariableDebt = params.reserveCache.currScaledVariableDebt.rayMul(
         params.reserveCache.nextVariableBorrowIndex
@@ -195,13 +196,14 @@ library ValidationLogic {
         require(vars.totalDebt <= vars.borrowCap * vars.assetUnit, Errors.BORROW_CAP_EXCEEDED);
       }
     }
-    // 隔离模式
+    // 用户处于隔离模式
     if (params.isolationModeActive) {
+      // 查看被借用的资产是否可以隔离模式借用
       // check that the asset being borrowed is borrowable in isolation mode AND
       // the total exposure is no bigger than the collateral debt ceiling
       require(
         params.reserveCache.reserveConfiguration.getBorrowableInIsolation(),
-        Errors.ASSET_NOT_BORROWABLE_IN_ISOLATION
+        Errors.ASSET_NOT_BORROWABLE_IN_ISOLATION // Asset is not borrowable in isolation mode
       );
 
       require(
@@ -220,14 +222,15 @@ library ValidationLogic {
         params.reserveCache.reserveConfiguration.getEModeCategory() == params.userEModeCategory,
         Errors.INCONSISTENT_EMODE_CATEGORY
       );
+      // 获取预言机地址（可能没有）
       vars.eModePriceSource = eModeCategories[params.userEModeCategory].priceSource;
     }
     // 以上都是检测池子状态
 
     // 接下来是检测用户的状态
     (
-      vars.userCollateralInBaseCurrency,
-      vars.userDebtInBaseCurrency,
+      vars.userCollateralInBaseCurrency, // 用户总的质押
+      vars.userDebtInBaseCurrency,  // 用户总的借贷
       vars.currentLtv,
       ,
       vars.healthFactor,
@@ -240,7 +243,7 @@ library ValidationLogic {
         userConfig: params.userConfig,
         reservesCount: params.reservesCount,
         user: params.userAddress,
-        oracle: params.oracle,
+        oracle: params.oracle, //  AaveOracle address
         userEModeCategory: params.userEModeCategory
       })
     );
@@ -252,7 +255,7 @@ library ValidationLogic {
       vars.healthFactor > HEALTH_FACTOR_LIQUIDATION_THRESHOLD,
       Errors.HEALTH_FACTOR_LOWER_THAN_LIQUIDATION_THRESHOLD
     );
-
+    // getAssetPrice 获取是asset换算成 base_currency 的价格（这里是U 单位是wei）
     vars.amountInBaseCurrency =
       IPriceOracleGetter(params.oracle).getAssetPrice(
         vars.eModePriceSource != address(0) ? vars.eModePriceSource : params.asset
@@ -262,7 +265,8 @@ library ValidationLogic {
       vars.amountInBaseCurrency /= vars.assetUnit;
     }
 
-    //add the current already borrowed amount to the amount requested to calculate the total collateral needed. 将当前已借入的金额与要求的金额相加，计算所需的总抵押品
+    //add the current already borrowed amount to the amount requested to calculate the total collateral needed.
+    // 计算当前的LTV下，再借amount 所需要的用户的质押总数
     vars.collateralNeededInBaseCurrency = (vars.userDebtInBaseCurrency + vars.amountInBaseCurrency)
       .percentDiv(vars.currentLtv); //LTV is calculated in percentage
     // There is not enough collateral to cover a new borrow
@@ -301,16 +305,18 @@ library ValidationLogic {
 
       require(params.amount <= maxLoanSizeStable, Errors.AMOUNT_BIGGER_THAN_MAX_LOAN_SIZE_STABLE);
     }
-    // 如果当前用户还有其他的借贷
+    // 如果当前用户有借贷（针对孤岛模式的）
     if (params.userConfig.isBorrowingAny()) {
-      // 借贷自查 是不是 孤独模式
+      // 判断已经存在的贷款是不是孤岛模式，孤岛模式的贷款不能与其他贷款同时存在
       (vars.siloedBorrowingEnabled, vars.siloedBorrowingAddress) = params
         .userConfig
         .getSiloedBorrowingState(reservesData, reservesList);
 
       if (vars.siloedBorrowingEnabled) {
+        // 如果存在孤岛贷款，再次借的必须是同种贷款，否则不允许
         require(vars.siloedBorrowingAddress == params.asset, Errors.SILOED_BORROWING_VIOLATION);
       } else {
+        // 如果存在孤岛贷款，判断正要贷的资产是不是孤岛资产，如果是的话，也不能贷款了（因为已经有一个正常的贷款了）
         require(
           !params.reserveCache.reserveConfiguration.getSiloedBorrowing(),
           Errors.SILOED_BORROWING_VIOLATION
@@ -729,7 +735,7 @@ library ValidationLogic {
     if (!userConfig.isUsingAsCollateralAny()) {
       return true;
     }
-    //  isolationModeActive == false  不是隔离模式
+    // 判断用户在不在隔离模式，也就是有没有正在抵押的隔离资产  isolationModeActive == false  不是隔离模式
     (bool isolationModeActive, , ) = userConfig.getIsolationModeState(reservesData, reservesList);
     // 不是隔离模式
     return (!isolationModeActive && reserveConfig.getDebtCeiling() == 0);

@@ -95,7 +95,7 @@ library BorrowLogic {
         interestRateMode: params.interestRateMode,
         maxStableLoanPercent: params.maxStableRateBorrowSizePercent,
         reservesCount: params.reservesCount,
-        oracle: params.oracle,
+        oracle: params.oracle, //  AaveOracle address
         userEModeCategory: params.userEModeCategory,
         priceOracleSentinel: params.priceOracleSentinel,
         isolationModeActive: isolationModeActive,
@@ -129,7 +129,7 @@ library BorrowLogic {
     if (isFirstBorrowing) {
       userConfig.setBorrowing(reserve.id, true);
     }
-    // 是不是隔离模式
+    // 隔离模式的资产是有借贷上限的 累加贷款金额
     if (isolationModeActive) {
       uint256 nextIsolationModeTotalDebt = reservesData[isolationModeCollateralAddress]
         .isolationModeTotalDebt += (params.amount /
@@ -189,6 +189,7 @@ library BorrowLogic {
     reserve.updateState(reserveCache);
 
     // 获取 onBehalfOf该用户的 目前已经借的Token数（稳定、浮动）
+    // 取出来的都是贴现之后的值
     (uint256 stableDebt, uint256 variableDebt) = Helpers.getUserCurrentDebt(
       params.onBehalfOf,
       reserveCache
@@ -240,6 +241,7 @@ library BorrowLogic {
       userConfig.setBorrowing(reserve.id, false);
     }
 
+    // 更新隔离资产
     IsolationModeLogic.updateIsolatedDebtIfIsolated(
       reservesData,
       reservesList,
