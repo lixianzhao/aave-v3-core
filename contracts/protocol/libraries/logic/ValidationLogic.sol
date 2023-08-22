@@ -230,7 +230,7 @@ library ValidationLogic {
     // 接下来是检测用户的状态
     (
       vars.userCollateralInBaseCurrency, // 用户总的质押
-      vars.userDebtInBaseCurrency,  // 用户总的借贷
+      vars.userDebtInBaseCurrency, // 用户总的借贷
       vars.currentLtv,
       ,
       vars.healthFactor,
@@ -503,7 +503,7 @@ library ValidationLogic {
     bool isCollateralEnabled;
   }
 
-  /**
+  /** 验证清算行为
    * @notice Validates the liquidation action.
    * @param userConfig The user configuration mapping
    * @param collateralReserve The reserve data of the collateral
@@ -515,11 +515,11 @@ library ValidationLogic {
     DataTypes.ValidateLiquidationCallParams memory params
   ) internal view {
     ValidateLiquidationCallLocalVars memory vars;
-
+    // 抵押物资产池子状态
     (vars.collateralReserveActive, , , , vars.collateralReservePaused) = collateralReserve
       .configuration
       .getFlags();
-
+    // 债务资产池子状态
     (vars.principalReserveActive, , , , vars.principalReservePaused) = params
       .debtReserveCache
       .reserveConfiguration
@@ -534,17 +534,18 @@ library ValidationLogic {
         IPriceOracleSentinel(params.priceOracleSentinel).isLiquidationAllowed(),
       Errors.PRICE_ORACLE_SENTINEL_CHECK_FAILED
     );
-
+    // healthFactor > 1 的 话比较健康 不能被清算
     require(
       params.healthFactor < HEALTH_FACTOR_LIQUIDATION_THRESHOLD,
       Errors.HEALTH_FACTOR_NOT_BELOW_THRESHOLD
     );
-
+    // 被清算人的抵押物是可用的
     vars.isCollateralEnabled =
       collateralReserve.configuration.getLiquidationThreshold() != 0 &&
       userConfig.isUsingAsCollateral(collateralReserve.id);
 
     //if collateral isn't enabled as collateral by user, it cannot be liquidated
+    // 如果被清算人的抵押物，是不能使用的，则不能被清算
     require(vars.isCollateralEnabled, Errors.COLLATERAL_CANNOT_BE_LIQUIDATED);
     require(params.totalDebt != 0, Errors.SPECIFIED_CURRENCY_NOT_BORROWED_BY_USER);
   }

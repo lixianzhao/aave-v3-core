@@ -210,7 +210,6 @@ library BorrowLogic {
       : variableDebt;
 
     // Allows a user to repay with aTokens without leaving dust from interest.
-    // 目前合约写死的是 false，所以不能用Atoken还款
     if (params.useATokens && params.amount == type(uint256).max) {
       params.amount = IAToken(reserveCache.aTokenAddress).balanceOf(msg.sender);
     }

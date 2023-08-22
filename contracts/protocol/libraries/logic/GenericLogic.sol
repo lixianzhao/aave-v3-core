@@ -169,7 +169,7 @@ library GenericLogic {
     }
 
     unchecked {
-      // 平均LTV（LTV= 总的借出的价值/总的用户质押的价值） 和 平均清算阈值
+      // 平均LTV（LTV= 总的可以借出的价值/总的用户质押的价值） 和 平均清算阈值
       vars.avgLtv = vars.totalCollateralInBaseCurrency != 0
         ? vars.avgLtv / vars.totalCollateralInBaseCurrency
         : 0;

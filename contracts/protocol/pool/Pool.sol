@@ -43,6 +43,7 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
   using ReserveLogic for DataTypes.ReserveData;
 
   uint256 public constant POOL_REVISION = 0x1;
+  // 0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e
   IPoolAddressesProvider public immutable ADDRESSES_PROVIDER;
 
   /**
@@ -218,6 +219,7 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
           amount: amount,
           to: to,
           reservesCount: _reservesCount,
+          // 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
           oracle: ADDRESSES_PROVIDER.getPriceOracle(),
           userEModeCategory: _usersEModeCategory[msg.sender]
         })
@@ -380,11 +382,19 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
   }
 
   /// @inheritdoc IPool
+  /**
+   *
+   * @param collateralAsset
+   * @param debtAsset
+   * @param user
+   * @param debtToCover
+   * @param receiveAToken
+   */
   function liquidationCall(
-    address collateralAsset,
-    address debtAsset,
-    address user,
-    uint256 debtToCover,
+    address collateralAsset, // 被清算的抵押物
+    address debtAsset, // 被清算人借贷的资产地址
+    address user, // 被清算人
+    uint256 debtToCover, // 清算人想要偿还的借款“资产”的债务数额
     bool receiveAToken
   ) public virtual override {
     LiquidationLogic.executeLiquidationCall(
@@ -399,6 +409,7 @@ contract Pool is VersionedInitializable, PoolStorage, IPool {
         debtAsset: debtAsset,
         user: user,
         receiveAToken: receiveAToken,
+        // 0x54586bE62E3c3580375aE3723C145253060Ca0C2
         priceOracle: ADDRESSES_PROVIDER.getPriceOracle(),
         userEModeCategory: _usersEModeCategory[user],
         priceOracleSentinel: ADDRESSES_PROVIDER.getPriceOracleSentinel()

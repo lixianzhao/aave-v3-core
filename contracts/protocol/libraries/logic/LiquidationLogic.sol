@@ -83,7 +83,7 @@ library LiquidationLogic {
   }
 
   /**
-   * @notice Function to liquidate a position if its Health Factor drops below 1. The caller (liquidator)
+   * @notice Function to liquidate a position if its Health Factor drops below 1. The caller (liquidator) HF 小于 1 触发清算逻辑
    * covers `debtToCover` amount of debt of the user getting liquidated, and receives
    * a proportional amount of the `collateralAsset` plus a bonus to cover market risk
    * @dev Emits the `LiquidationCall()` event
@@ -104,10 +104,12 @@ library LiquidationLogic {
 
     DataTypes.ReserveData storage collateralReserve = reservesData[params.collateralAsset];
     DataTypes.ReserveData storage debtReserve = reservesData[params.debtAsset];
+    // 被清算人信息
     DataTypes.UserConfigurationMap storage userConfig = usersConfig[params.user];
     vars.debtReserveCache = debtReserve.cache();
     debtReserve.updateState(vars.debtReserveCache);
 
+    // 当前用户的健康因子HF
     (, , , , vars.healthFactor, ) = GenericLogic.calculateUserAccountData(
       reservesData,
       reservesList,
@@ -120,7 +122,7 @@ library LiquidationLogic {
         userEModeCategory: params.userEModeCategory
       })
     );
-
+    // 被清算人的浮动贷款、总贷款、可以清算的债务额度（清算人需要还的）
     (vars.userVariableDebt, vars.userTotalDebt, vars.actualDebtToLiquidate) = _calculateDebt(
       vars.debtReserveCache,
       params,
@@ -144,7 +146,7 @@ library LiquidationLogic {
       vars.debtPriceSource,
       vars.liquidationBonus
     ) = _getConfigurationData(eModeCategories, collateralReserve, params);
-
+    // 被清算人的有多少Atoken( 也就是该资产的抵押物)
     vars.userCollateralBalance = vars.collateralAToken.balanceOf(params.user);
 
     (
@@ -161,7 +163,7 @@ library LiquidationLogic {
       vars.liquidationBonus,
       IPriceOracleGetter(params.priceOracle)
     );
-
+    // 被清算人债务全部被清算
     if (vars.userTotalDebt == vars.actualDebtToLiquidate) {
       userConfig.setBorrowing(debtReserve.id, false);
     }
@@ -175,7 +177,7 @@ library LiquidationLogic {
       userConfig.setUsingAsCollateral(collateralReserve.id, false);
       emit ReserveUsedAsCollateralDisabled(params.collateralAsset, params.user);
     }
-
+    // burn清算人债务token
     _burnDebtTokens(params, vars);
 
     debtReserve.updateInterestRates(
@@ -192,14 +194,17 @@ library LiquidationLogic {
       vars.debtReserveCache,
       vars.actualDebtToLiquidate
     );
-
+    // true : 清算人希望收到代币的抵押品 false:receive the underlying collateral asset
     if (params.receiveAToken) {
+      // 直接吧aToken转给清算人
       _liquidateATokens(reservesData, reservesList, usersConfig, collateralReserve, params, vars);
     } else {
+      // 不想要Atoken，想要对应的资产，那就先把Atoken burn掉
       _burnCollateralATokens(collateralReserve, params, vars);
     }
 
     // Transfer fee to treasury if it is non-zero
+    // aave收取的费用
     if (vars.liquidationProtocolFeeAmount != 0) {
       uint256 liquidityIndex = collateralReserve.getNormalizedIncome();
       uint256 scaledDownLiquidationProtocolFee = vars.liquidationProtocolFeeAmount.rayDiv(
@@ -210,6 +215,7 @@ library LiquidationLogic {
       if (scaledDownLiquidationProtocolFee > scaledDownUserBalance) {
         vars.liquidationProtocolFeeAmount = scaledDownUserBalance.rayMul(liquidityIndex);
       }
+      // 把aToken转给AAVE资金库
       vars.collateralAToken.transferOnLiquidation(
         params.user,
         vars.collateralAToken.RESERVE_TREASURY_ADDRESS(),
@@ -218,12 +224,13 @@ library LiquidationLogic {
     }
 
     // Transfers the debt asset being repaid to the aToken, where the liquidity is kept
+    // 清算人偿还债务, 把偿还的资产转移给Atoken
     IERC20(params.debtAsset).safeTransferFrom(
       msg.sender,
       vars.debtReserveCache.aTokenAddress,
       vars.actualDebtToLiquidate
     );
-
+    // 仅做权限控制
     IAToken(vars.debtReserveCache.aTokenAddress).handleRepayment(
       msg.sender,
       params.user,
@@ -291,6 +298,7 @@ library LiquidationLogic {
     LiquidationCallLocalVars memory vars
   ) internal {
     uint256 liquidatorPreviousATokenBalance = IERC20(vars.collateralAToken).balanceOf(msg.sender);
+    // 将Atoken从清算人手里 转移到被清算人手里
     vars.collateralAToken.transferOnLiquidation(
       params.user,
       msg.sender,
@@ -371,13 +379,16 @@ library LiquidationLogic {
     );
 
     uint256 userTotalDebt = userStableDebt + userVariableDebt;
-
+    // 清算系数
+    // 0.95 < healthFactor < 1 DEFAULT_LIQUIDATION_CLOSE_FACTOR
+    // healthFactor < 0.95  MAX_LIQUIDATION_CLOSE_FACTOR
     uint256 closeFactor = healthFactor > CLOSE_FACTOR_HF_THRESHOLD
       ? DEFAULT_LIQUIDATION_CLOSE_FACTOR
       : MAX_LIQUIDATION_CLOSE_FACTOR;
-
+    // 最大的清算债务
     uint256 maxLiquidatableDebt = userTotalDebt.percentMul(closeFactor);
-
+    // 被清算的真正的债务
+    // debtToCover 清算人期望的清算金额
     uint256 actualDebtToLiquidate = params.debtToCover > maxLiquidatableDebt
       ? maxLiquidatableDebt
       : params.debtToCover;
@@ -401,11 +412,13 @@ library LiquidationLogic {
     DataTypes.ExecuteLiquidationCallParams memory params
   ) internal view returns (IAToken, address, address, uint256) {
     IAToken collateralAToken = IAToken(collateralReserve.aTokenAddress);
+    // 清算奖金
     uint256 liquidationBonus = collateralReserve.configuration.getLiquidationBonus();
 
     address collateralPriceSource = params.collateralAsset;
     address debtPriceSource = params.debtAsset;
 
+    // 被清算人是否处于高效模式
     if (params.userEModeCategory != 0) {
       address eModePriceSource = eModeCategories[params.userEModeCategory].priceSource;
 
@@ -447,18 +460,18 @@ library LiquidationLogic {
     uint256 liquidationProtocolFee;
   }
 
-  /**
+  /** 根据给定的债务数量，计算有多少特定的抵押品可以被清算
    * @notice Calculates how much of a specific collateral can be liquidated, given
    * a certain amount of debt asset.
-   * @dev This function needs to be called after all the checks to validate the liquidation have been performed,
+   * @dev This function needs to be called after all the checks to validate the liquidation have been performed, 该函数需要在执行所有验证清算的检查之后调用
    *   otherwise it might fail.
    * @param collateralReserve The data of the collateral reserve
    * @param debtReserveCache The cached data of the debt reserve
-   * @param collateralAsset The address of the underlying asset used as collateral, to receive as result of the liquidation
-   * @param debtAsset The address of the underlying borrowed asset to be repaid with the liquidation
-   * @param debtToCover The debt amount of borrowed `asset` the liquidator wants to cover
-   * @param userCollateralBalance The collateral balance for the specific `collateralAsset` of the user being liquidated
-   * @param liquidationBonus The collateral bonus percentage to receive as result of the liquidation
+   * @param collateralAsset The address of the underlying asset used as collateral, to receive as result of the liquidation 抵押品的地址
+   * @param debtAsset The address of the underlying borrowed asset to be repaid with the liquidation 随着清算一并偿还的借款资产地址
+   * @param debtToCover The debt amount of borrowed `asset` the liquidator wants to cover 清算人想要偿还的借款“资产”的债务数额
+   * @param userCollateralBalance The collateral balance for the specific `collateralAsset` of the user being liquidated 被清算的用户的特定“抵押品资产”的抵押品余额
+   * @param liquidationBonus The collateral bonus percentage to receive as result of the liquidation 作为清算结果的抵押品奖金百分比
    * @return The maximum amount that is possible to liquidate given all the liquidation constraints (user balance, close factor)
    * @return The amount to repay with the liquidation
    * @return The fee taken from the liquidation bonus amount to be paid to the protocol
@@ -485,16 +498,17 @@ library LiquidationLogic {
       vars.collateralAssetUnit = 10 ** vars.collateralDecimals;
       vars.debtAssetUnit = 10 ** vars.debtAssetDecimals;
     }
-
+    // 在清算过程中，AAVE收取的费用
     vars.liquidationProtocolFeePercentage = collateralReserve
       .configuration
       .getLiquidationProtocolFee();
 
     // This is the base collateral to liquidate based on the given debt to cover
+    // 以给定的债务为基础 计算清算的基础抵押品，
     vars.baseCollateral =
       ((vars.debtAssetPrice * debtToCover * vars.collateralAssetUnit)) /
       (vars.collateralPrice * vars.debtAssetUnit);
-
+    // maxAmountOfCollateralToLiquidate = (debtAssetPrice * debtToCover * liquidationBonus)/ collateralPrice
     vars.maxCollateralToLiquidate = vars.baseCollateral.percentMul(liquidationBonus);
 
     if (vars.maxCollateralToLiquidate > userCollateralBalance) {
